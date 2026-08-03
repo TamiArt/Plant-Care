@@ -1,7 +1,7 @@
 import type { CatalogPlant } from "./types";
 
 // ─── CATALOG ─────────────────────────────────────────────────────────────────
-export const CATALOG: CatalogPlant[] = [
+export const CORE_CATALOG: CatalogPlant[] = [
   {
     id: "monstera",
     name: "Монстера деликатесная",

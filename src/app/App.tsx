@@ -9,7 +9,8 @@ import {
   Bot, Loader2, ImagePlus, WifiOff, Smartphone, Pencil, List,
 } from "lucide-react";
 import { usePwa } from "../pwa";
-import { CATALOG } from "../features/catalog/data";
+import { CATALOG } from "../features/catalog/catalog";
+import { filterCatalog } from "../features/catalog/search";
 import type { CatalogPlant } from "../features/catalog/types";
 import { CatalogScreen, CATALOG_FILTERS } from "../features/catalog/CatalogScreen";
 import { LANG_LABELS, toExternalTaxon, useGbif } from "../features/catalog/gbif";
@@ -781,14 +782,7 @@ function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (cp: Cat
   const [result, setResult] = useState<CatalogPlant | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [addFilter, setAddFilter] = useState<string | null>(null);
-  const filteredCatalog = CATALOG.filter(cp => {
-    const matchesFilter = addFilter === null || cp.tags.includes(addFilter);
-    const matchesQuery = catalogQuery === "" ||
-      cp.name.toLowerCase().includes(catalogQuery.toLowerCase()) ||
-      cp.latinName.toLowerCase().includes(catalogQuery.toLowerCase()) ||
-      cp.tags.some(t => t.includes(catalogQuery.toLowerCase()));
-    return matchesFilter && matchesQuery;
-  });
+  const filteredCatalog = filterCatalog(CATALOG, catalogQuery, addFilter);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

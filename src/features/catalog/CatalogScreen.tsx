@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChevronRight, Loader2, Search } from "lucide-react";
-import { CATALOG } from "./data";
+import { CATALOG } from "./catalog";
 import { useGbifSearch } from "./gbif";
+import { filterCatalog } from "./search";
 import type { CatalogPlant } from "./types";
 
 export const CATALOG_FILTERS = [
@@ -34,10 +35,7 @@ export function CatalogScreen({ onSelect }: { onSelect: (plant: CatalogPlant) =>
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const global = useGbifSearch(query);
   const normalized = query.toLocaleLowerCase().trim();
-  const filtered = CATALOG.filter(plant =>
-    (activeFilter === null || plant.tags.includes(activeFilter)) &&
-    (!normalized || plant.name.toLocaleLowerCase().includes(normalized) || plant.latinName.toLocaleLowerCase().includes(normalized) || plant.tags.some(tag => tag.includes(normalized)))
-  );
+  const filtered = filterCatalog(CATALOG, query, activeFilter);
 
   return <div className="flex h-full flex-col">
     <header className="flex-shrink-0 px-5 pb-3 pt-5">
