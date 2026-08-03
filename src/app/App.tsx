@@ -14,50 +14,19 @@ import { filterCatalog } from "../features/catalog/search";
 import type { CatalogPlant } from "../features/catalog/types";
 import { CatalogScreen, CATALOG_FILTERS } from "../features/catalog/CatalogScreen";
 import { LANG_LABELS, toExternalTaxon, useGbif } from "../features/catalog/gbif";
-import { useGarden, type PlantLocation, type UserPlant } from "../features/garden";
+import { daysSince, getWateringStatus, useGarden, type PlantLocation, type UserPlant, type WateringStatus } from "../features/garden";
 import { createBackup, DEFAULT_SETTINGS, downloadBackup, parseBackup, type PlantCareSettings } from "../features/backup/backup";
 import { AiAssistantSheet, type AssistantContext } from "../features/assistant";
 import { ChecklistScreen, getSeasonLabel, isWinterMonth } from "../features/care";
 import { getNoteLineKind, insertNotePrefix, toggleChecklistLine } from "../features/garden/noteUtils";
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
-interface WateringStatus {
-  label: string;
-  color: "green" | "yellow" | "red" | "gray";
-  daysUntil: number;
-  urgency: number;
-}
-
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-function daysSince(dateStr: string): number {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  return Math.floor(diff / 86_400_000);
-}
-
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-}
-
-function getWateringStatus(up: UserPlant): WateringStatus {
-  const interval = up.wateringInterval;
-  if (up.wateringHistory.length === 0) {
-    return { label: "Полейте сегодня", color: "gray", daysUntil: 0, urgency: 0.5 };
-  }
-  const last = up.wateringHistory[up.wateringHistory.length - 1];
-  const days = daysSince(last);
-  const daysUntil = interval - days;
-  if (daysUntil <= 0) {
-    return {
-      label: daysUntil === 0 ? "Полейте сегодня" : `Просрочено ${Math.abs(daysUntil)} дн.`,
-      color: "red", daysUntil, urgency: 1,
-    };
-  }
-  if (daysUntil === 1) return { label: "Полейте завтра", color: "yellow", daysUntil, urgency: 0.7 };
-  return { label: `Через ${daysUntil} дн.`, color: "green", daysUntil, urgency: 0 };
 }
 
 // Resolve display info for both catalog and custom plants
