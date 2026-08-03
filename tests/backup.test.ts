@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBackup, parseBackup, serializeBackup } from "../src/features/backup/backup.ts";
+import { createBackup, mergeBackupPlants, parseBackup, serializeBackup } from "../src/features/backup/backup.ts";
 import type { UserPlant } from "../src/features/garden/types.ts";
 
 const plant: UserPlant = {
@@ -46,4 +46,12 @@ test("rejects unsupported and damaged backup files", () => {
   assert.equal(parseBackup({ version: 99, plants: [] }).backup, null);
   assert.equal(parseBackup({ app: "plantcare", version: 2, plants: [{ nickname: "Без ID" }] }).backup, null);
   assert.equal(parseBackup("not-json-object").backup, null);
+});
+
+test("merges only plants with new identifiers", () => {
+  const incoming = [plant, { ...plant, id: "plant-2", nickname: "Второе растение" }];
+  const result = mergeBackupPlants([plant], incoming);
+
+  assert.equal(result.addedCount, 1);
+  assert.deepEqual(result.plants.map(item => item.id), ["plant-1", "plant-2"]);
 });

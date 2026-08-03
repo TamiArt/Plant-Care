@@ -31,6 +31,15 @@ export interface BackupParseResult {
   migratedFrom?: number;
 }
 
+export function mergeBackupPlants(current: UserPlant[], incoming: UserPlant[]): {
+  plants: UserPlant[];
+  addedCount: number;
+} {
+  const existingIds = new Set(current.map(plant => plant.id));
+  const additions = incoming.filter(plant => !existingIds.has(plant.id));
+  return { plants: [...current, ...additions], addedCount: additions.length };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
