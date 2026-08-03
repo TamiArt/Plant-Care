@@ -184,3 +184,28 @@
     line-height: 1.5;
   }
 }
+
+@layer base {
+  html, body, #root {
+    min-height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  button, a, input, textarea, select {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.app-shell {
+  height: 100dvh;
+}
+
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}
