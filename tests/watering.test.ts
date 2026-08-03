@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { daysSince, getWateringStatus } from "../src/features/garden/model/watering.ts";
+import { daysSince, getWateringStatus, replaceLastWateringDate } from "../src/features/garden/model/watering.ts";
 import type { UserPlant } from "../src/features/garden/types.ts";
 
 const NOW = Date.parse("2026-08-10T00:00:00.000Z");
@@ -33,4 +33,19 @@ test("returns green, tomorrow, due, and overdue statuses", () => {
   assert.deepEqual(getWateringStatus(withLastWatering("2026-08-01"), NOW), {
     label: "Просрочено 2 дн.", color: "red", daysUntil: -2, urgency: 1,
   });
+});
+
+test("edits only the latest watering record", () => {
+  assert.deepEqual(
+    replaceLastWateringDate(["2026-07-01", "2026-08-01"], "2026-08-03"),
+    ["2026-07-01", "2026-08-03"],
+  );
+  assert.deepEqual(replaceLastWateringDate([], "2026-08-03"), ["2026-08-03"]);
+});
+
+test("removes only the latest watering record", () => {
+  assert.deepEqual(
+    replaceLastWateringDate(["2026-07-01", "2026-08-01"], null),
+    ["2026-07-01"],
+  );
 });

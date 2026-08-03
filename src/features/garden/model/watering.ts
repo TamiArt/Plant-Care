@@ -33,3 +33,8 @@ export function getWateringStatus(plant: UserPlant, now: number = Date.now()): W
   }
   return { label: `Через ${daysUntil} дн.`, color: "green", daysUntil, urgency: 0 };
 }
+
+export function replaceLastWateringDate(history: string[], date: string | null): string[] {
+  const previous = history.slice(0, -1);
+  return date ? [...previous, date] : previous;
+}

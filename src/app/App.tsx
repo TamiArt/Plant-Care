@@ -14,7 +14,7 @@ import { filterCatalog } from "../features/catalog/search";
 import type { CatalogPlant } from "../features/catalog/types";
 import { CatalogScreen, CATALOG_FILTERS } from "../features/catalog/CatalogScreen";
 import { LANG_LABELS, toExternalTaxon, useGbif } from "../features/catalog/gbif";
-import { daysSince, getWateringStatus, useGarden, type PlantLocation, type UserPlant, type WateringStatus } from "../features/garden";
+import { daysSince, getWateringStatus, replaceLastWateringDate, useGarden, type PlantLocation, type UserPlant, type WateringStatus } from "../features/garden";
 import { createBackup, DEFAULT_SETTINGS, downloadBackup, parseBackup, type PlantCareSettings } from "../features/backup/backup";
 import { AiAssistantSheet, type AssistantContext } from "../features/assistant";
 import { ChecklistScreen, getSeasonLabel, isWinterMonth } from "../features/care";
@@ -1113,6 +1113,7 @@ function EditPlantModal({ up, onSave, onClose }: {
   const catalogPlant = up.catalogId ? CATALOG.find(plant => plant.id === up.catalogId) : null;
   const [nickname, setNickname] = useState(up.nickname);
   const [wateringInterval, setWateringInterval] = useState(up.wateringInterval);
+  const [lastWateringDate, setLastWateringDate] = useState(up.wateringHistory.at(-1)?.slice(0, 10) ?? "");
   const [fertilizingInterval, setFertilizingInterval] = useState(up.fertilizingInterval);
   const [description, setDescription] = useState(up.customDescription ?? "");
   const [photo, setPhoto] = useState<string | null>(up.photo);
@@ -1155,7 +1156,22 @@ function EditPlantModal({ up, onSave, onClose }: {
           className="mb-4 w-full resize-none rounded-2xl bg-muted px-4 py-3 text-sm outline-none" placeholder="Особенности ухода или растения" />
 
         <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Полив каждые {wateringInterval} дн.</label>
-        <input type="range" min={1} max={60} value={wateringInterval} onChange={event => setWateringInterval(Number(event.target.value))} className="mb-4 w-full accent-primary" />
+        <div className="mb-4 flex items-center gap-3">
+          <input type="range" min={1} max={60} value={wateringInterval} onChange={event => setWateringInterval(Number(event.target.value))} className="min-w-0 flex-1 accent-primary" />
+          <input aria-label="Интервал полива в днях" type="number" min={1} max={60} value={wateringInterval}
+            onChange={event => setWateringInterval(Math.min(60, Math.max(1, Number(event.target.value) || 1)))}
+            className="w-16 rounded-xl bg-muted px-2 py-2 text-center text-sm outline-none" />
+        </div>
+
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <label className="block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Последний полив</label>
+            {lastWateringDate && <button type="button" onClick={() => setLastWateringDate("")} className="text-[11px] font-medium text-red-500">Удалить отметку</button>}
+          </div>
+          <input type="date" max={todayStr()} value={lastWateringDate} onChange={event => setLastWateringDate(event.target.value)}
+            className="w-full rounded-2xl bg-muted px-4 py-3 text-sm outline-none" />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">Исправьте дату, если полив отметили не в тот день.</p>
+        </div>
 
         <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Подкормка каждые {fertilizingInterval} дн.</label>
         <input type="range" min={0} max={90} value={fertilizingInterval} onChange={event => setFertilizingInterval(Number(event.target.value))} className="mb-5 w-full accent-primary" />
@@ -1163,7 +1179,11 @@ function EditPlantModal({ up, onSave, onClose }: {
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 rounded-2xl border border-border py-3.5 text-sm font-medium">Отмена</button>
           <button disabled={!nickname.trim()} onClick={() => {
-            onSave({ nickname: nickname.trim(), photo, wateringInterval, fertilizingInterval, customDescription: description.trim() || undefined });
+            onSave({
+              nickname: nickname.trim(), photo, wateringInterval, fertilizingInterval,
+              wateringHistory: replaceLastWateringDate(up.wateringHistory, lastWateringDate || null),
+              customDescription: description.trim() || undefined,
+            });
             onClose();
           }} className="flex-1 rounded-2xl bg-primary py-3.5 text-sm font-medium text-primary-foreground disabled:opacity-40">Сохранить</button>
         </div>
