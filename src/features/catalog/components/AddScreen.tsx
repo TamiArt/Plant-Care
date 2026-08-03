@@ -1,6 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { Camera, ChevronRight, Leaf, Plus, Scan, Search } from "lucide-react";
+import { Camera, ChevronRight, Plus, Search } from "lucide-react";
 import { PlantImage } from "../../../shared/components/PlantImage";
 import { CATALOG } from "../catalog";
 import { filterCatalog } from "../search";
@@ -11,9 +10,6 @@ import { DifficultyBadge } from "./DifficultyBadge";
 export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (cp: CatalogPlant) => void; onAddCustom: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanMode, setScanMode] = useState<"identify" | "diagnose" | null>(null);
-  const [result, setResult] = useState<CatalogPlant | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [addFilter, setAddFilter] = useState<string | null>(null);
   const filteredCatalog = filterCatalog(CATALOG, catalogQuery, addFilter);
@@ -22,25 +18,15 @@ export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => { setPhoto(reader.result as string); setResult(null); };
+    reader.onload = () => setPhoto(reader.result as string);
     reader.readAsDataURL(file);
-  };
-
-  const runScan = (mode: "identify" | "diagnose") => {
-    setScanMode(mode);
-    setScanning(true);
-    setResult(null);
-    setTimeout(() => {
-      setResult(CATALOG[Math.floor(Math.random() * CATALOG.length)]);
-      setScanning(false);
-    }, 2200);
   };
 
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 pt-5 pb-3 flex-shrink-0">
         <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: "Lora, serif" }}>Добавить</h1>
-        <p className="text-xs text-muted-foreground">Сканируйте или выберите из каталога</p>
+        <p className="text-xs text-muted-foreground">Добавьте фото или выберите растение из каталога</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-28 space-y-4">
@@ -70,97 +56,11 @@ export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (
           )}
         </div>
 
-        {/* Scan action buttons */}
-        <AnimatePresence>
-          {photo && !scanning && !result && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="grid grid-cols-2 gap-3"
-            >
-              <button onClick={() => runScan("identify")}
-                className="bg-primary text-primary-foreground rounded-2xl p-4 flex flex-col items-center gap-2"
-              >
-                <Scan size={22} />
-                <span className="text-sm font-medium text-center leading-tight">Определить растение</span>
-              </button>
-              <button onClick={() => runScan("diagnose")}
-                className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 text-foreground"
-              >
-                <Leaf size={22} className="text-primary" />
-                <span className="text-sm font-medium text-center leading-tight">Диагностика листа</span>
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Scanning animation */}
-        {scanning && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="bg-card border border-border rounded-3xl p-8 flex flex-col items-center gap-4"
-          >
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
-              className="w-12 h-12 rounded-full border-[3px] border-primary border-t-transparent"
-            />
-            <p className="text-sm text-muted-foreground text-center">
-              {scanMode === "identify" ? "Определяю растение..." : "Анализирую лист..."}
-            </p>
-          </motion.div>
-        )}
-
-        {/* Identify result */}
-        {result && scanMode === "identify" && !scanning && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-3xl overflow-hidden"
-          >
-            <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100">
-              <p className="text-sm font-semibold text-emerald-700">✓ Растение определено</p>
-            </div>
-            <div className="flex items-center gap-3 p-4">
-              <PlantImage catalogPlant={result} className="w-16 h-16 rounded-2xl flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground">{result.name}</p>
-                <p className="text-xs text-muted-foreground italic mb-1">{result.latinName}</p>
-                <DifficultyBadge value={result.difficulty} />
-              </div>
-            </div>
-            <div className="px-4 pb-4 flex gap-3">
-              <button onClick={() => { setResult(null); setPhoto(null); }}
-                className="flex-1 py-3 rounded-2xl border border-border text-sm font-medium"
-              >
-                Повторить
-              </button>
-              <button onClick={() => onSelectCatalog(result)}
-                className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-medium"
-              >
-                Открыть карточку
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Diagnose result */}
-        {result && scanMode === "diagnose" && !scanning && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-3xl overflow-hidden"
-          >
-            <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
-              <p className="text-sm font-semibold text-amber-700">🔍 Возможные проблемы</p>
-            </div>
-            <div className="p-4 space-y-2.5">
-              {result.diseases.map((d, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-amber-500 mt-0.5">•</span>
-                  <p className="text-sm text-foreground">{d}</p>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 pb-4">
-              <button onClick={() => { setResult(null); setPhoto(null); }}
-                className="w-full py-3 rounded-2xl border border-border text-sm font-medium"
-              >
-                Повторить сканирование
-              </button>
-            </div>
-          </motion.div>
+        {photo && (
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <p className="text-sm font-semibold text-primary">Фото добавлено</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Автоматическое распознавание не используется: бесплатной достаточно точной модели пока нет. Найдите растение в каталоге ниже или добавьте свою карточку.</p>
+          </div>
         )}
 
         {/* Custom plant button */}

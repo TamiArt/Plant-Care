@@ -36,7 +36,7 @@ function resolvePlantPresentation(plant: UserPlant) {
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const garden = useGarden();
-  const { canInstall, install, isOnline } = usePwa();
+  const { canInstall, install, isOnline, offlineReady, updateAvailable, applyUpdate } = usePwa();
   const [tab, setTab] = useState<Tab>(() => getInitialTab(window.location.search));
   const [catalogDetail, setCatalogDetail] = useState<CatalogPlant | null>(null);
   const [addToGarden, setAddToGarden] = useState<CatalogPlant | null>(null);
@@ -98,7 +98,15 @@ export default function App() {
 
   return (
     <div className="app-shell relative w-full h-full max-w-md mx-auto bg-background overflow-hidden flex flex-col">
-      <PwaStatus canInstall={canInstall} isOnline={isOnline} onInstall={install} />
+      <PwaStatus
+        canInstall={canInstall}
+        isOnline={isOnline}
+        offlineReady={offlineReady}
+        updateAvailable={updateAvailable}
+        storageError={garden.storageError}
+        onInstall={install}
+        onUpdate={applyUpdate}
+      />
       <div className="flex-1 overflow-hidden">
         {tab === "home" && <PlantsScreen location="home" plants={garden.plants} {...sharedScreenProps} />}
         {tab === "garden" && <PlantsScreen location="outdoor" plants={garden.plants} {...sharedScreenProps} />}

@@ -8,6 +8,9 @@ interface InstallPromptEvent extends Event {
 export function usePwa() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [offlineReady, setOfflineReady] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
 
   useEffect(() => {
     const onInstallPrompt = (event: Event) => {
@@ -24,9 +27,17 @@ export function usePwa() {
     window.addEventListener("offline", onOffline);
 
     if ("serviceWorker" in navigator && import.meta.env.PROD) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
-        console.warn("Service worker registration failed", error);
-      });
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(nextRegistration => {
+        setRegistration(nextRegistration);
+        if (nextRegistration.waiting) setUpdateAvailable(true);
+        const watch = (worker: ServiceWorker | null) => worker?.addEventListener("statechange", () => {
+          if (worker.state !== "installed") return;
+          if (navigator.serviceWorker.controller) setUpdateAvailable(true);
+          else setOfflineReady(true);
+        });
+        watch(nextRegistration.installing);
+        nextRegistration.addEventListener("updatefound", () => watch(nextRegistration.installing));
+      }).catch((error) => console.warn("Service worker registration failed", error));
     }
 
     return () => {
@@ -44,5 +55,18 @@ export function usePwa() {
     setInstallPrompt(null);
   }, [installPrompt]);
 
-  return { canInstall: Boolean(installPrompt), install, isOnline };
+  const applyUpdate = useCallback(() => {
+    const waiting = registration?.waiting;
+    if (!waiting) {
+      void registration?.update();
+      return;
+    }
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!reloaded) { reloaded = true; window.location.reload(); }
+    });
+    waiting.postMessage({ type: "SKIP_WAITING" });
+  }, [registration]);
+
+  return { canInstall: Boolean(installPrompt), install, isOnline, offlineReady, updateAvailable, applyUpdate };
 }
