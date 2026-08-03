@@ -6,7 +6,7 @@ import {
   Trash2, Search, AlertTriangle, Home, Trees,
   Download, Upload, Database, CheckCircle2,
   FlaskConical, StickyNote, Bell, Square, CheckSquare,
-  Bot, Loader2, ImagePlus, WifiOff, Smartphone,
+  Bot, Loader2, ImagePlus, WifiOff, Smartphone, Pencil, List,
 } from "lucide-react";
 import { usePwa } from "../pwa";
 import { CATALOG } from "../features/catalog/data";
@@ -16,6 +16,7 @@ import { LANG_LABELS, toExternalTaxon, useGbif } from "../features/catalog/gbif"
 import type { PlantLocation, PlantNote, PlantReminder, UserPlant } from "../features/garden/types";
 import { createBackup, DEFAULT_SETTINGS, downloadBackup, parseBackup, type PlantCareSettings } from "../features/backup/backup";
 import { AiAssistantSheet, type AssistantContext } from "../features/assistant";
+import { getNoteLineKind, insertNotePrefix, toggleChecklistLine } from "../features/garden/noteUtils";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 interface WateringStatus {
@@ -1352,24 +1353,25 @@ function AddToGardenModal({
 }
 
 // ─── NOTE CONTENT RENDERER ───────────────────────────────────────────────────
-function NoteContent({ content }: { content: string }) {
+function NoteContent({ content, onToggleChecklist }: { content: string; onToggleChecklist: (lineIndex: number) => void }) {
   const lines = content.split("\n");
   return (
     <div className="text-sm text-foreground space-y-0.5 leading-relaxed">
       {lines.map((line, i) => {
-        if (line.startsWith("[x] ")) return (
-          <div key={i} className="flex items-start gap-2">
+        const kind = getNoteLineKind(line);
+        if (kind === "check-done") return (
+          <button type="button" key={i} onClick={() => onToggleChecklist(i)} className="flex w-full items-start gap-2 text-left">
             <CheckSquare size={13} className="text-primary mt-0.5 flex-shrink-0" />
             <span className="line-through text-muted-foreground">{line.slice(4)}</span>
-          </div>
+          </button>
         );
-        if (line.startsWith("[ ] ")) return (
-          <div key={i} className="flex items-start gap-2">
+        if (kind === "check-open") return (
+          <button type="button" key={i} onClick={() => onToggleChecklist(i)} className="flex w-full items-start gap-2 text-left">
             <Square size={13} className="text-muted-foreground mt-0.5 flex-shrink-0" />
             <span>{line.slice(4)}</span>
-          </div>
+          </button>
         );
-        if (line.startsWith("- ")) return (
+        if (kind === "bullet") return (
           <div key={i} className="flex items-start gap-2">
             <span className="text-primary font-bold mt-0.5 text-[10px] flex-shrink-0">•</span>
             <span>{line.slice(2)}</span>
@@ -1377,6 +1379,95 @@ function NoteContent({ content }: { content: string }) {
         );
         return <p key={i}>{line || " "}</p>;
       })}
+    </div>
+  );
+}
+
+// ─── EDIT EXISTING PLANT ─────────────────────────────────────────────────────
+function EditPlantModal({ up, onSave, onClose }: {
+  up: UserPlant;
+  onSave: (changes: Partial<UserPlant>) => void;
+  onClose: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const catalogPlant = up.catalogId ? CATALOG.find(plant => plant.id === up.catalogId) : null;
+  const [nickname, setNickname] = useState(up.nickname);
+  const [wateringInterval, setWateringInterval] = useState(up.wateringInterval);
+  const [fertilizingInterval, setFertilizingInterval] = useState(up.fertilizingInterval);
+  const [description, setDescription] = useState(up.customDescription ?? "");
+  const [photo, setPhoto] = useState<string | null>(up.photo);
+
+  const handlePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : null);
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center px-4 pb-8">
+      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+        className="relative max-h-[88vh] w-full max-w-sm overflow-y-auto rounded-3xl bg-card p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-foreground">Редактировать растение</h3>
+          <button onClick={onClose} aria-label="Закрыть редактирование" className="flex h-8 w-8 items-center justify-center rounded-full bg-muted"><X size={16} /></button>
+        </div>
+
+        <div className="mb-4 overflow-hidden rounded-2xl bg-secondary">
+          <PlantImg key={photo ?? "catalog-fallback"} cp={catalogPlant} userPhoto={photo} emoji={up.customEmoji} className="h-40 w-full" />
+          <div className="flex gap-2 p-3">
+            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
+            <button onClick={() => fileRef.current?.click()} className="flex-1 rounded-xl bg-card px-3 py-2.5 text-xs font-medium text-primary">
+              <ImagePlus size={14} className="mr-1.5 inline" /> {photo ? "Заменить фото" : "Добавить фото"}
+            </button>
+            {photo && <button onClick={() => setPhoto(null)} className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-medium text-red-500">Удалить</button>}
+          </div>
+        </div>
+
+        <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Название</label>
+        <input value={nickname} onChange={event => setNickname(event.target.value)} className="mb-4 w-full rounded-2xl bg-muted px-4 py-3 text-sm outline-none" />
+
+        <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Описание</label>
+        <textarea value={description} onChange={event => setDescription(event.target.value)} rows={3}
+          className="mb-4 w-full resize-none rounded-2xl bg-muted px-4 py-3 text-sm outline-none" placeholder="Особенности ухода или растения" />
+
+        <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Полив каждые {wateringInterval} дн.</label>
+        <input type="range" min={1} max={60} value={wateringInterval} onChange={event => setWateringInterval(Number(event.target.value))} className="mb-4 w-full accent-primary" />
+
+        <label className="mb-1 block text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Подкормка каждые {fertilizingInterval} дн.</label>
+        <input type="range" min={0} max={90} value={fertilizingInterval} onChange={event => setFertilizingInterval(Number(event.target.value))} className="mb-5 w-full accent-primary" />
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-2xl border border-border py-3.5 text-sm font-medium">Отмена</button>
+          <button disabled={!nickname.trim()} onClick={() => {
+            onSave({ nickname: nickname.trim(), photo, wateringInterval, fertilizingInterval, customDescription: description.trim() || undefined });
+            onClose();
+          }} className="flex-1 rounded-2xl bg-primary py-3.5 text-sm font-medium text-primary-foreground disabled:opacity-40">Сохранить</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function DeletePlantConfirm({ name, onConfirm, onClose }: { name: string; onConfirm: () => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center px-4 pb-10">
+      <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        className="relative w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50"><Trash2 size={21} className="text-red-500" /></div>
+        <h3 className="mb-2 text-center text-lg font-bold text-foreground">Удалить растение?</h3>
+        <p className="mb-6 text-center text-sm leading-relaxed text-muted-foreground">
+          «{name}» и вся история ухода, заметки и напоминания будут удалены. Это действие нельзя отменить.
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-2xl border border-border py-3.5 text-sm font-medium">Отмена</button>
+          <button onClick={onConfirm} className="flex-1 rounded-2xl bg-red-500 py-3.5 text-sm font-medium text-white">Удалить</button>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -1547,11 +1638,12 @@ function CustomPlantModal({
 type PlantTab = "care" | "notes" | "reminders";
 
 function UserPlantSheet({
-  up, onClose, onRemove, onWater, onMist, onFertilize, onMoveLocation,
-  onAddNote, onDeleteNote, onAddReminder, onToggleReminder, onDeleteReminder,
+  up, onClose, onEdit, onRemove, onWater, onMist, onFertilize, onMoveLocation,
+  onAddNote, onDeleteNote, onToggleNoteItem, onAddReminder, onToggleReminder, onDeleteReminder,
 }: {
   up: UserPlant;
   onClose: () => void;
+  onEdit: () => void;
   onRemove: () => void;
   onWater: () => void;
   onMist: () => void;
@@ -1559,6 +1651,7 @@ function UserPlantSheet({
   onMoveLocation: (loc: PlantLocation) => void;
   onAddNote: (content: string) => void;
   onDeleteNote: (noteId: string) => void;
+  onToggleNoteItem: (noteId: string, lineIndex: number) => void;
   onAddReminder: (title: string, date: string) => void;
   onToggleReminder: (reminderId: string) => void;
   onDeleteReminder: (reminderId: string) => void;
@@ -1568,6 +1661,7 @@ function UserPlantSheet({
   const status = getWateringStatus(up);
   const [activeTab, setActiveTab] = useState<PlantTab>("care");
   const [noteText, setNoteText] = useState("");
+  const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState(todayStr());
   const fertToday = up.fertilizingHistory[up.fertilizingHistory.length - 1] === todayStr();
@@ -1576,6 +1670,16 @@ function UserPlantSheet({
     ? up.fertilizingInterval - daysSince(lastFert)
     : null;
   const fertOverdue = fertDaysUntil !== null && fertDaysUntil <= 0;
+
+  const addNotePrefix = (prefix: "- " | "[ ] ") => {
+    const input = noteInputRef.current;
+    const result = insertNotePrefix(noteText, prefix, input?.selectionStart, input?.selectionEnd);
+    setNoteText(result.value);
+    window.requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(result.cursor, result.cursor);
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col">
@@ -1607,9 +1711,14 @@ function UserPlantSheet({
                 <h2 className="text-xl font-bold text-foreground leading-tight">{up.nickname}</h2>
                 {display.latinName && <p className="text-sm text-muted-foreground italic">{display.latinName}</p>}
               </div>
-              <button onClick={onRemove} className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-                <Trash2 size={15} className="text-red-400" />
-              </button>
+              <div className="flex gap-2">
+                <button onClick={onEdit} aria-label="Редактировать растение" className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                  <Pencil size={15} className="text-primary" />
+                </button>
+                <button onClick={onRemove} aria-label="Удалить растение" className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                  <Trash2 size={15} className="text-red-400" />
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2 mb-3">
@@ -1734,9 +1843,18 @@ function UserPlantSheet({
                 {/* Add note */}
                 <div className="bg-secondary rounded-2xl p-3">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">
-                    Новая заметка · Поддерживает: - маркер, [ ] чекбокс, [x] выполнено
+                    Новая заметка
                   </p>
+                  <div className="mb-2 flex gap-2">
+                    <button type="button" onClick={() => addNotePrefix("- ")} className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border">
+                      <List size={13} /> Маркер
+                    </button>
+                    <button type="button" onClick={() => addNotePrefix("[ ] ")} className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border">
+                      <CheckSquare size={13} /> Чекбокс
+                    </button>
+                  </div>
                   <textarea
+                    ref={noteInputRef}
                     value={noteText} onChange={e => setNoteText(e.target.value)}
                     placeholder={"Например:\n- Пересадить весной\n[ ] Купить горшок\nОтцвела 15 июня"}
                     rows={4}
@@ -1765,7 +1883,7 @@ function UserPlantSheet({
                           <Trash2 size={12} className="text-red-400" />
                         </button>
                       </div>
-                      <NoteContent content={note.content} />
+                      <NoteContent content={note.content} onToggleChecklist={lineIndex => onToggleNoteItem(note.id, lineIndex)} />
                     </div>
                   ))
                 )}
@@ -1919,6 +2037,8 @@ export default function App() {
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
   const [dataSheetOpen, setDataSheetOpen] = useState(false);
   const [customPlantOpen, setCustomPlantOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<UserPlant | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserPlant | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiContext, setAiContext] = useState<AssistantContext | undefined>();
 
@@ -2055,16 +2175,40 @@ export default function App() {
           <UserPlantSheet key="user-detail"
             up={liveDetail}
             onClose={() => setUserDetail(null)}
-            onRemove={() => { garden.removePlant(liveDetail.id); setUserDetail(null); }}
+            onEdit={() => setEditTarget(liveDetail)}
+            onRemove={() => setDeleteTarget(liveDetail)}
             onWater={() => garden.waterPlant(liveDetail.id)}
             onMist={() => { garden.mistPlant(liveDetail.id); }}
             onFertilize={() => garden.fertilizePlant(liveDetail.id)}
             onMoveLocation={loc => garden.updatePlant(liveDetail.id, { location: loc })}
             onAddNote={content => garden.addNote(liveDetail.id, content)}
             onDeleteNote={noteId => garden.deleteNote(liveDetail.id, noteId)}
+            onToggleNoteItem={(noteId, lineIndex) => {
+              const note = liveDetail.notes.find(item => item.id === noteId);
+              if (note) garden.updateNote(liveDetail.id, noteId, toggleChecklistLine(note.content, lineIndex));
+            }}
             onAddReminder={(title, date) => garden.addReminder(liveDetail.id, title, date)}
             onToggleReminder={rid => garden.toggleReminder(liveDetail.id, rid)}
             onDeleteReminder={rid => garden.deleteReminder(liveDetail.id, rid)}
+          />
+        )}
+        {editTarget && (
+          <EditPlantModal key="edit-plant"
+            up={garden.plants.find(plant => plant.id === editTarget.id) ?? editTarget}
+            onSave={changes => garden.updatePlant(editTarget.id, changes)}
+            onClose={() => setEditTarget(null)}
+          />
+        )}
+        {deleteTarget && (
+          <DeletePlantConfirm key="delete-plant"
+            name={deleteTarget.nickname}
+            onClose={() => setDeleteTarget(null)}
+            onConfirm={() => {
+              garden.removePlant(deleteTarget.id);
+              setDeleteTarget(null);
+              setEditTarget(null);
+              setUserDetail(null);
+            }}
           />
         )}
         {aiOpen && (
