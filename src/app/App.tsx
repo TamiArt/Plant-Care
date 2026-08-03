@@ -14,7 +14,7 @@ import { filterCatalog } from "../features/catalog/search";
 import type { CatalogPlant } from "../features/catalog/types";
 import { CatalogScreen, CATALOG_FILTERS } from "../features/catalog/CatalogScreen";
 import { LANG_LABELS, toExternalTaxon, useGbif } from "../features/catalog/gbif";
-import type { PlantLocation, PlantNote, PlantReminder, UserPlant } from "../features/garden/types";
+import { useGarden, type PlantLocation, type UserPlant } from "../features/garden";
 import { createBackup, DEFAULT_SETTINGS, downloadBackup, parseBackup, type PlantCareSettings } from "../features/backup/backup";
 import { AiAssistantSheet, type AssistantContext } from "../features/assistant";
 import { getNoteLineKind, insertNotePrefix, toggleChecklistLine } from "../features/garden/noteUtils";
@@ -44,10 +44,6 @@ function todayStr(): string {
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
-}
-
-function uid(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
 function getWateringStatus(up: UserPlant): WateringStatus {
@@ -120,167 +116,6 @@ const ALL_SEASON_TIPS: SeasonTip[] = [
 function getCurrentTips(): SeasonTip[] {
   const m = new Date().getMonth() + 1;
   return ALL_SEASON_TIPS.filter(t => t.months.includes(m));
-}
-
-// ─── HOOK: useGarden ─────────────────────────────────────────────────────────
-const GARDEN_KEY = "plantcare_v1";
-
-function loadFromStorage(): UserPlant[] {
-  try {
-    const raw = localStorage.getItem(GARDEN_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as UserPlant[];
-    // migrate: ensure all fields exist for older saved data
-    return parsed.map(p => ({
-      location: "home" as PlantLocation,
-      fertilizingInterval: 30,
-      fertilizingHistory: [],
-      notes: [],
-      reminders: [],
-      catalogId: null,
-      ...p,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function saveToStorage(plants: UserPlant[]): void {
-  try {
-    localStorage.setItem(GARDEN_KEY, JSON.stringify(plants));
-  } catch {
-    /* quota exceeded or private browsing — silently ignore */
-  }
-}
-
-function useGarden() {
-  const [plants, setPlants] = useState<UserPlant[]>(loadFromStorage);
-
-  const persist = useCallback((next: UserPlant[]) => {
-    setPlants(next);
-    saveToStorage(next);
-  }, []);
-
-  const addPlant = useCallback(
-    (
-      catalogId: string | null,
-      nickname: string,
-      wateringInterval: number,
-      photo: string | null = null,
-      location: PlantLocation = "home",
-      extra: Partial<UserPlant> = {}
-    ) => {
-      const p: UserPlant = {
-        id: uid(), catalogId, nickname, photo, wateringInterval,
-        wateringHistory: [], mistingHistory: [],
-        fertilizingInterval: 30, fertilizingHistory: [],
-        notes: [], reminders: [],
-        addedAt: todayStr(), location,
-        ...extra,
-      };
-      persist([...plants, p]);
-    },
-    [plants, persist]
-  );
-
-  const removePlant = useCallback(
-    (id: string) => persist(plants.filter(p => p.id !== id)),
-    [plants, persist]
-  );
-
-  const waterPlant = useCallback(
-    (id: string) =>
-      persist(plants.map(p =>
-        p.id === id ? { ...p, wateringHistory: [...p.wateringHistory, todayStr()] } : p
-      )),
-    [plants, persist]
-  );
-
-  const mistPlant = useCallback(
-    (id: string) =>
-      persist(plants.map(p =>
-        p.id === id ? { ...p, mistingHistory: [...p.mistingHistory, todayStr()] } : p
-      )),
-    [plants, persist]
-  );
-
-  const updatePlant = useCallback(
-    (id: string, changes: Partial<UserPlant>) =>
-      persist(plants.map(p => (p.id === id ? { ...p, ...changes } : p))),
-    [plants, persist]
-  );
-
-  const fertilizePlant = useCallback(
-    (id: string) =>
-      persist(plants.map(p =>
-        p.id === id ? { ...p, fertilizingHistory: [...p.fertilizingHistory, todayStr()] } : p
-      )),
-    [plants, persist]
-  );
-
-  const addNote = useCallback(
-    (id: string, content: string) => {
-      const note: PlantNote = { id: uid(), createdAt: todayStr(), content };
-      persist(plants.map(p => p.id === id ? { ...p, notes: [...p.notes, note] } : p));
-    },
-    [plants, persist]
-  );
-
-  const updateNote = useCallback(
-    (plantId: string, noteId: string, content: string) =>
-      persist(plants.map(p =>
-        p.id === plantId
-          ? { ...p, notes: p.notes.map(n => n.id === noteId ? { ...n, content } : n) }
-          : p
-      )),
-    [plants, persist]
-  );
-
-  const deleteNote = useCallback(
-    (plantId: string, noteId: string) =>
-      persist(plants.map(p =>
-        p.id === plantId ? { ...p, notes: p.notes.filter(n => n.id !== noteId) } : p
-      )),
-    [plants, persist]
-  );
-
-  const addReminder = useCallback(
-    (plantId: string, title: string, date: string) => {
-      const r: PlantReminder = { id: uid(), title, date, done: false };
-      persist(plants.map(p => p.id === plantId ? { ...p, reminders: [...p.reminders, r] } : p));
-    },
-    [plants, persist]
-  );
-
-  const toggleReminder = useCallback(
-    (plantId: string, reminderId: string) =>
-      persist(plants.map(p =>
-        p.id === plantId
-          ? { ...p, reminders: p.reminders.map(r => r.id === reminderId ? { ...r, done: !r.done } : r) }
-          : p
-      )),
-    [plants, persist]
-  );
-
-  const deleteReminder = useCallback(
-    (plantId: string, reminderId: string) =>
-      persist(plants.map(p =>
-        p.id === plantId ? { ...p, reminders: p.reminders.filter(r => r.id !== reminderId) } : p
-      )),
-    [plants, persist]
-  );
-
-  const replacePlants = useCallback(
-    (next: UserPlant[]) => persist(next),
-    [persist]
-  );
-
-  return {
-    plants, addPlant, removePlant, waterPlant, mistPlant, fertilizePlant,
-    updatePlant, replacePlants,
-    addNote, updateNote, deleteNote,
-    addReminder, toggleReminder, deleteReminder,
-  };
 }
 
 // ─── SMALL COMPONENTS ────────────────────────────────────────────────────────
