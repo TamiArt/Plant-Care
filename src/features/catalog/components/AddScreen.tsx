@@ -7,7 +7,10 @@ import type { CatalogPlant } from "../types";
 import { CATALOG_FILTERS } from "../CatalogScreen";
 import { DifficultyBadge } from "./DifficultyBadge";
 
-export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (cp: CatalogPlant) => void; onAddCustom: () => void }) {
+export function AddScreen({ onSelectCatalog, onAddCustom }: {
+  onSelectCatalog: (cp: CatalogPlant, photo: string | null) => void;
+  onAddCustom: (photo: string | null) => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [catalogQuery, setCatalogQuery] = useState("");
@@ -65,7 +68,7 @@ export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (
 
         {/* Custom plant button */}
         <button
-          onClick={onAddCustom}
+          onClick={() => onAddCustom(photo)}
           className="w-full flex items-center gap-3 bg-secondary border-2 border-dashed border-primary/30 rounded-2xl p-4 text-left"
         >
           <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -113,7 +116,7 @@ export function AddScreen({ onSelectCatalog, onAddCustom }: { onSelectCatalog: (
           </div>
           <div className="space-y-2">
             {filteredCatalog.map(cp => (
-              <button key={cp.id} onClick={() => onSelectCatalog(cp)}
+              <button key={cp.id} onClick={() => onSelectCatalog(cp, photo)}
                 className="w-full flex items-center gap-3 bg-card border border-border rounded-2xl p-3 text-left active:bg-secondary transition-colors"
               >
                 <PlantImage catalogPlant={cp} className="w-12 h-12 rounded-xl flex-shrink-0" />

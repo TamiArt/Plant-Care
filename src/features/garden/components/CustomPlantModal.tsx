@@ -5,10 +5,12 @@ import type { PlantLocation, UserPlant } from "../types";
 
 export function CustomPlantModal({
   defaultLocation = "home",
+  initialPhoto = null,
   onConfirm,
   onClose,
 }: {
   defaultLocation?: PlantLocation;
+  initialPhoto?: string | null;
   onConfirm: (data: Partial<UserPlant> & { nickname: string; wateringInterval: number; location: PlantLocation }) => void;
   onClose: () => void;
 }) {
@@ -17,7 +19,7 @@ export function CustomPlantModal({
   const [latinName, setLatinName] = useState("");
   const [description, setDescription] = useState("");
   const [emoji, setEmoji] = useState("🌿");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(initialPhoto);
   const [interval, setWaterInterval] = useState(7);
   const [location, setLocation] = useState<PlantLocation>(defaultLocation);
 

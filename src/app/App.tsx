@@ -110,12 +110,21 @@ export default function App() {
       <div className="flex-1 overflow-hidden">
         {tab === "home" && <PlantsScreen location="home" plants={garden.plants} {...sharedScreenProps} />}
         {tab === "garden" && <PlantsScreen location="outdoor" plants={garden.plants} {...sharedScreenProps} />}
-        {tab === "catalog" && <CatalogScreen onSelect={cp => setCatalogDetail(cp)} />}
+        {tab === "catalog" && <CatalogScreen onSelect={cp => {
+          setPendingPhoto(null);
+          setCatalogDetail(cp);
+        }} />}
         {tab === "checklist" && <ChecklistScreen />}
         {tab === "add" && (
           <AddScreen
-            onSelectCatalog={cp => setCatalogDetail(cp)}
-            onAddCustom={() => setCustomPlantOpen(true)}
+            onSelectCatalog={(cp, photo) => {
+              setPendingPhoto(photo);
+              setCatalogDetail(cp);
+            }}
+            onAddCustom={photo => {
+              setPendingPhoto(photo);
+              setCustomPlantOpen(true);
+            }}
           />
         )}
       </div>
@@ -150,7 +159,10 @@ export default function App() {
       <AnimatePresence>
         {catalogDetail && !addToGarden && (
           <CatalogDetailSheet key="cat-detail" cp={catalogDetail}
-            onClose={() => setCatalogDetail(null)}
+            onClose={() => {
+              setCatalogDetail(null);
+              setPendingPhoto(null);
+            }}
             onAddToGarden={() => setAddToGarden(catalogDetail)}
           />
         )}
@@ -165,8 +177,12 @@ export default function App() {
         {customPlantOpen && (
           <CustomPlantModal key="custom-plant"
             defaultLocation={tab === "garden" ? "outdoor" : "home"}
+            initialPhoto={pendingPhoto}
             onConfirm={handleConfirmCustom}
-            onClose={() => setCustomPlantOpen(false)}
+            onClose={() => {
+              setCustomPlantOpen(false);
+              setPendingPhoto(null);
+            }}
           />
         )}
         {liveDetail && (
