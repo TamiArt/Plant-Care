@@ -19,12 +19,5 @@ export interface CatalogPlant {
   gbifStatus?: string;
 }
 
-export interface ExternalTaxonReference {
-  provider: "gbif";
-  taxonKey: number;
-  scientificName: string;
-  canonicalName?: string;
-  rank?: string;
-  status?: string;
-  fetchedAt: string;
-}
+export type { ExternalTaxonReference };
+import type { ExternalTaxonReference } from "../../shared/types/taxonomy";

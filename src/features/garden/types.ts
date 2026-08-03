@@ -1,4 +1,4 @@
-import type { ExternalTaxonReference } from "../catalog/types";
+import type { ExternalTaxonReference } from "../../shared/types/taxonomy";
 
 export type PlantLocation = "home" | "outdoor";
 
