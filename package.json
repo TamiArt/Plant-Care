@@ -4,10 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "icons": "node scripts/generate-icons.mjs",
-    "prebuild": "npm run icons",
     "build": "vite build",
-    "predev": "npm run icons",
     "dev": "vite",
     "preview": "vite preview",
     "test": "node --test tests/*.test.ts",
