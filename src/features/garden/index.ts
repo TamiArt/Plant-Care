@@ -9,3 +9,12 @@ export type { PlantPresentation, PlantsScreenProps } from "./components/PlantsSc
 export { daysSince, getWateringStatus, replaceLastWateringDate } from "./model/watering";
 export type { WateringStatus } from "./model/watering";
 export type { PlantDisplay, PlantLocation, PlantNote, PlantReminder, UserPlant } from "./types";
+export {
+  createPhotoPreviewUrl,
+  dataUrlToFile,
+  preparePhoto,
+} from "./services/preparePhoto";
+
+export type {
+  PreparedPhoto,
+} from "./services/preparePhoto";

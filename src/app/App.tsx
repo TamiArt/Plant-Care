@@ -269,7 +269,7 @@ const {
       () => setDataSheetOpen(true),
   };
     return (
-    <div className="app-shell relative w-full h-full max-w-md mx-auto bg-background overflow-hidden flex flex-col">
+    <div className="app-shell relative flex h-full w-full flex-col overflow-hidden bg-background">
 
 <PwaStatus
   canInstall={canInstall}
