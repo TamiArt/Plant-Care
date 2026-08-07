@@ -24,7 +24,7 @@ export function PlantCard({ plant, display, catalogPlant, onWater, onMist, onOpe
       className={`bg-card rounded-3xl border shadow-sm overflow-hidden ${urgent ? "border-red-200" : "border-border"}`}>
       <button onClick={onOpen} className="flex w-full items-stretch text-left">
         <div className="relative flex-shrink-0">
-          <PlantImage catalogPlant={catalogPlant} userPhoto={plant.photo} emoji={display.emoji} className="w-24 h-24" />
+          <PlantImage catalogPlant={catalogPlant} photoId={plant.photoId} emoji={display.emoji} className="w-24 h-24" />
           {urgent && <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
             <Droplets size={11} className="text-white" />
           </div>}

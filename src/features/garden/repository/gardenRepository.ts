@@ -1,13 +1,6 @@
-import type {
-  PlantPhoto,
-  UserPlant,
-} from "../types";
-
+import type { PlantPhoto, UserPlant } from "../types";
 import { getGardenDb } from "./gardenDb";
 
-/**
- * Данные новой фотографии до формирования полной записи PlantPhoto.
- */
 export interface SavePlantPhotoInput {
   id: string;
   plantId: string;
@@ -17,61 +10,57 @@ export interface SavePlantPhotoInput {
   height: number;
 }
 
-/**
- * Загружает все растения.
- *
- * Фотографии сюда не включаются.
- */
-export async function getAllPlants(): Promise<UserPlant[]> {
-  const database = await getGardenDb();
+function stripLegacyPhoto(plant: UserPlant): UserPlant {
+  const value = plant as UserPlant & { photo?: unknown };
 
-  return database.getAll("plants");
+  const {
+    photo: _legacyPhoto,
+    ...withoutLegacyPhoto
+  } = value;
+
+  return {
+    ...withoutLegacyPhoto,
+    photoId:
+      typeof withoutLegacyPhoto.photoId === "string"
+        ? withoutLegacyPhoto.photoId
+        : null,
+  };
 }
 
-/**
- * Возвращает одно растение.
- */
+export async function getAllPlants(): Promise<UserPlant[]> {
+  const database = await getGardenDb();
+  const plants = await database.getAll("plants");
+
+  return plants.map(stripLegacyPhoto);
+}
+
 export async function getPlant(
   plantId: string,
 ): Promise<UserPlant | undefined> {
   const database = await getGardenDb();
+  const plant = await database.get("plants", plantId);
 
-  return database.get("plants", plantId);
+  return plant ? stripLegacyPhoto(plant) : undefined;
 }
 
-/**
- * Возвращает фотографию как Blob-запись.
- */
 export async function getPlantPhoto(
   photoId: string,
 ): Promise<PlantPhoto | undefined> {
   const database = await getGardenDb();
-
   return database.get("photos", photoId);
 }
 
-/**
- * Возвращает все фотографии.
- *
- * Позже используется для ZIP-экспорта.
- */
 export async function getAllPlantPhotos(): Promise<PlantPhoto[]> {
   const database = await getGardenDb();
-
   return database.getAll("photos");
 }
 
-/**
- * Сохраняет растение и при необходимости фотографию
- * в одной транзакции.
- */
 export async function savePlant(
   plant: UserPlant,
   newPhoto?: SavePlantPhotoInput | null,
   previousPhotoId?: string | null,
 ): Promise<void> {
   const database = await getGardenDb();
-
   const transaction = database.transaction(
     ["plants", "photos"],
     "readwrite",
@@ -88,27 +77,20 @@ export async function savePlant(
   }
 
   if (newPhoto) {
-    const photoRecord: PlantPhoto = {
+    await photoStore.put({
       ...newPhoto,
       createdAt: new Date().toISOString(),
-    };
-
-    await photoStore.put(photoRecord);
+    });
   }
 
-  await plantStore.put(plant);
+  await plantStore.put(stripLegacyPhoto(plant));
   await transaction.done;
 }
 
-/**
- * Удаляет растение и все фотографии,
- * связанные с ним через индекс by-plant.
- */
 export async function deletePlant(
   plant: UserPlant,
 ): Promise<void> {
   const database = await getGardenDb();
-
   const transaction = database.transaction(
     ["plants", "photos"],
     "readwrite",
@@ -130,35 +112,25 @@ export async function deletePlant(
   await transaction.done;
 }
 
-/**
- * Полностью заменяет список растений.
- *
- * Пока этот метод не изменяет фотографии.
- */
 export async function replacePlants(
   plants: UserPlant[],
 ): Promise<void> {
   const database = await getGardenDb();
-
   const transaction = database.transaction(
     "plants",
     "readwrite",
   );
 
   const plantStore = transaction.objectStore("plants");
-
   await plantStore.clear();
 
   for (const plant of plants) {
-    await plantStore.put(plant);
+    await plantStore.put(stripLegacyPhoto(plant));
   }
 
   await transaction.done;
 }
 
-/**
- * Читает служебную запись.
- */
 export async function getMetaValue<T>(
   key: string,
 ): Promise<T | undefined> {
@@ -168,9 +140,6 @@ export async function getMetaValue<T>(
   return record?.value as T | undefined;
 }
 
-/**
- * Сохраняет служебную запись.
- */
 export async function setMetaValue(
   key: string,
   value: unknown,

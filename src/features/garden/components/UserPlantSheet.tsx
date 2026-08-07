@@ -74,7 +74,7 @@ export function UserPlantSheet({
         <div className="flex-1 overflow-y-auto">
           {/* Hero image */}
           <div className="relative">
-            <PlantImage catalogPlant={catalogPlant} userPhoto={up.photo} emoji={display.emoji} className="w-full h-48" />
+            <PlantImage catalogPlant={catalogPlant} photoId={up.photoId} emoji={display.emoji} className="w-full h-48" />
             <button onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
             >

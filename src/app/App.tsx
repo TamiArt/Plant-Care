@@ -14,8 +14,11 @@ import {
   EditPlantModal,
   UserPlantSheet,
   useGarden,
+  type CustomPlantSubmitData,
+  type EditPlantSaveData,
   type PlantDisplay,
   type PlantLocation,
+  type PreparedPhoto,
   type UserPlant,
 } from "../features/garden";
 
@@ -110,7 +113,7 @@ const {
     useState<CatalogPlant | null>(null);
 
   const [pendingPhoto, setPendingPhoto] =
-    useState<string | null>(null);
+    useState<PreparedPhoto | null>(null);
 
   const [customPlantOpen, setCustomPlantOpen] =
     useState(false);
@@ -154,93 +157,98 @@ const {
 
 
   const handleConfirmAdd = useCallback(
-    (
+    async (
       nickname: string,
       interval: number,
-      location: PlantLocation
-    ) => {
-      if (!addToGarden) return;
+      location: PlantLocation,
+    ): Promise<boolean> => {
+      if (!addToGarden) {
+        return false;
+      }
 
-      if (addToGarden.source === "gbif") {
-        garden.addPlant(
-          null,
-          nickname,
-          interval,
-          pendingPhoto,
-          location,
-          {
-            customName: addToGarden.name,
-            customLatinName: addToGarden.latinName,
-            customDescription: addToGarden.description,
-            customEmoji: addToGarden.emoji,
-            externalTaxon: toExternalTaxon(addToGarden),
-          }
-        );
-      } else {
-        garden.addPlant(
-          addToGarden.id,
-          nickname,
-          interval,
-          pendingPhoto,
-          location
-        );
+      const result = await garden.addPlant({
+        catalogId:
+          addToGarden.source === "gbif"
+            ? null
+            : addToGarden.id,
+        nickname,
+        wateringInterval: interval,
+        photo: pendingPhoto,
+        location,
+        extra:
+          addToGarden.source === "gbif"
+            ? {
+                customName: addToGarden.name,
+                customLatinName:
+                  addToGarden.latinName,
+                customDescription:
+                  addToGarden.description,
+                customEmoji: addToGarden.emoji,
+                externalTaxon:
+                  toExternalTaxon(addToGarden),
+              }
+            : {},
+      });
+
+      if (!result.ok) {
+        return false;
       }
 
       setAddToGarden(null);
       setCatalogDetail(null);
       setPendingPhoto(null);
-
       setTab(
         location === "home"
           ? "home"
-          : "garden"
+          : "garden",
       );
+
+      return true;
     },
     [
       addToGarden,
-      pendingPhoto,
       garden,
-    ]
+      pendingPhoto,
+    ],
   );
-
 
   const handleConfirmCustom = useCallback(
-    (
-      data: Partial<UserPlant> & {
-        nickname: string;
-        wateringInterval: number;
-        location: PlantLocation;
+    async (
+      data: CustomPlantSubmitData,
+    ): Promise<boolean> => {
+      const result = await garden.addPlant({
+        catalogId: null,
+        nickname: data.nickname,
+        wateringInterval:
+          data.wateringInterval,
+        location: data.location,
+        photo: data.photo,
+        extra: {
+          customName: data.customName,
+          customLatinName:
+            data.customLatinName,
+          customDescription:
+            data.customDescription,
+          customEmoji: data.customEmoji,
+        },
+      });
+
+      if (!result.ok) {
+        return false;
       }
-    ) => {
-      const {
-        nickname,
-        wateringInterval,
-        location,
-        ...extra
-      } = data;
-
-
-      garden.addPlant(
-        null,
-        nickname,
-        wateringInterval,
-        extra.photo ?? null,
-        location,
-        extra
-      );
-
 
       setCustomPlantOpen(false);
-
+      setPendingPhoto(null);
       setTab(
-        location === "home"
+        data.location === "home"
           ? "home"
-          : "garden"
+          : "garden",
       );
-    },
-    [garden]
-  );
 
+      return true;
+    },
+    [garden],
+  );
 
   const sharedScreenProps = {
     seasonLabel:
@@ -592,7 +600,7 @@ const {
 
           />
         )}
-        
+
         {editTarget && (
           <EditPlantModal
             key="edit-plant"
@@ -613,12 +621,23 @@ const {
                 : null
             }
 
-            onSave={(changes) =>
-              garden.updatePlant(
-                editTarget.id,
-                changes
-              )
-            }
+            onSave={async ({
+              changes,
+              photo,
+              removePhoto,
+            }: EditPlantSaveData) => {
+              const result =
+                await garden.updatePlant(
+                  editTarget.id,
+                  changes,
+                  {
+                    photo,
+                    removePhoto,
+                  },
+                );
+
+              return result.ok;
+            }}
 
             onClose={() =>
               setEditTarget(null)
@@ -639,13 +658,18 @@ const {
             }
 
             onConfirm={() => {
-              garden.removePlant(
-                deleteTarget.id
-              );
+              void (async () => {
+                const result =
+                  await garden.removePlant(
+                    deleteTarget.id,
+                  );
 
-              setDeleteTarget(null);
-              setEditTarget(null);
-              setUserDetail(null);
+                if (result.ok) {
+                  setDeleteTarget(null);
+                  setEditTarget(null);
+                  setUserDetail(null);
+                }
+              })();
             }}
           />
         )}
@@ -685,7 +709,7 @@ const {
               importedSettings,
               mode
             ) => {
-              garden.replacePlants(plants);
+              void garden.replacePlants(plants);
 
               if (
                 mode === "replace" &&
