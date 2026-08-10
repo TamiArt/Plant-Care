@@ -1,27 +1,39 @@
-export { useGarden } from "./hooks/useGarden";
-export { usePhotoUrl } from "./hooks/usePhotoUrl";
+export {
+  useGarden,
+} from "./hooks/useGarden";
+
+export {
+  usePhotoUrl,
+} from "./hooks/usePhotoUrl";
 
 export {
   PlantCard,
 } from "./components/PlantCard";
+
 export {
   PlantsScreen,
 } from "./components/PlantsScreen";
+
 export {
   CustomPlantModal,
 } from "./components/CustomPlantModal";
+
 export type {
   CustomPlantSubmitData,
 } from "./components/CustomPlantModal";
+
 export {
   DeletePlantConfirm,
 } from "./components/DeletePlantConfirm";
+
 export {
   EditPlantModal,
 } from "./components/EditPlantModal";
+
 export type {
   EditPlantSaveData,
 } from "./components/EditPlantModal";
+
 export {
   UserPlantSheet,
 } from "./components/UserPlantSheet";
@@ -36,6 +48,7 @@ export {
   getWateringStatus,
   replaceLastWateringDate,
 } from "./model/watering";
+
 export type {
   WateringStatus,
 } from "./model/watering";
@@ -54,6 +67,7 @@ export {
   dataUrlToFile,
   preparePhoto,
 } from "./services/preparePhoto";
+
 export type {
   PreparedPhoto,
 } from "./services/preparePhoto";
@@ -61,5 +75,19 @@ export type {
 export type {
   AddPlantInput,
   GardenOperationResult,
+  GardenSyncResult,
+  GardenSyncStatus,
   UpdatePlantPhotoOptions,
 } from "./hooks/useGarden";
+
+export {
+  syncGarden,
+} from "./sync/syncGarden";
+
+export {
+  syncPlantsWithCloud,
+} from "./sync/syncRepository";
+
+export type {
+  CloudSyncResult,
+} from "./sync/syncRepository";

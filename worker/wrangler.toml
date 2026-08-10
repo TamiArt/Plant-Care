@@ -1,0 +1,13 @@
+name = "plantcare-api"
+main = "index.ts"
+compatibility_date = "2026-08-08"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_ENV = "production"
+APP_ORIGIN = "https://plant-care-khaki.vercel.app"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "plantcare-db"
+database_id = "55937f6a-40ff-4cc9-bb5d-1ae53031e289"

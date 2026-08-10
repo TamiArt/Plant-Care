@@ -49,9 +49,17 @@ import {
 } from "../features/backup";
 
 import {
+  AuthSheet,
+  useAuth,
+} from "../features/auth";
+
+import {
   toggleChecklistLine,
 } from "../features/garden/noteUtils";
 
+import {
+  useGardenAutoSync,
+} from "../features/garden/hooks/useGardenAutoSync";
 
 function resolvePlantDisplay(up: UserPlant): PlantDisplay {
   if (up.catalogId) {
@@ -90,6 +98,27 @@ function resolvePlantPresentation(plant: UserPlant) {
 
 export default function App() {
   const garden = useGarden();
+  const auth = useAuth();
+
+  const {
+    syncNow,
+  } = useGardenAutoSync({
+    userId:
+      auth.user?.id ??
+      null,
+
+    authLoading:
+      auth.isLoading,
+
+    gardenLoading:
+      garden.isLoading,
+
+    plants:
+      garden.plants,
+
+    syncWithCloud:
+      garden.syncWithCloud,
+  });
 
 const {
   canInstall,
@@ -131,6 +160,9 @@ const {
 
   const [dataSheetOpen, setDataSheetOpen] =
     useState(false);
+
+  const [authSheetOpen, setAuthSheetOpen] =
+  useState(false);
 
 
   const [aiOpen, setAiOpen] =
@@ -692,40 +724,83 @@ const {
 
 
 
-        {dataSheetOpen && (
-          <DataSheet
+{dataSheetOpen && (
+  <DataSheet
+    key="data-sheet"
 
-            key="data-sheet"
+    plants={garden.plants}
 
-            plants={garden.plants}
+    settings={{
+      ...DEFAULT_SETTINGS,
+      lastActiveTab: tab,
+    }}
 
-            settings={{
-              ...DEFAULT_SETTINGS,
-              lastActiveTab: tab,
-            }}
+    authUser={auth.user}
 
-            onImport={(
-              plants,
-              importedSettings,
-              mode
-            ) => {
-              void garden.replacePlants(plants);
+    authLoading={auth.isLoading}
 
-              if (
-                mode === "replace" &&
-                importedSettings
-              ) {
-                setTab(
-                  importedSettings.lastActiveTab
-                );
-              }
-            }}
+        syncStatus={
+      garden.syncStatus
+    }
 
-            onClose={() =>
-              setDataSheetOpen(false)
-            }
-          />
-        )}
+    syncError={
+      garden.syncError
+    }
+
+    lastSyncedAt={
+      garden.lastSyncedAt
+    }
+
+    onSync={() => {
+      void syncNow();
+    }}
+
+    onOpenAuth={() => {
+      setDataSheetOpen(false);
+      setAuthSheetOpen(true);
+    }}
+
+    onLogout={async () => {
+      return await auth.logout();
+    }}
+
+    onImport={(
+      plants,
+      importedSettings,
+      mode
+    ) => {
+      void garden.replacePlants(plants);
+
+      if (
+        mode === "replace" &&
+        importedSettings
+      ) {
+        setTab(
+          importedSettings.lastActiveTab
+        );
+      }
+    }}
+
+    onClose={() =>
+      setDataSheetOpen(false)
+    }
+  />
+)}
+
+{authSheetOpen && (
+  <AuthSheet
+    key="auth-sheet"
+
+    onLogin={auth.login}
+
+    onRegister={auth.register}
+
+    onClose={() => {
+      setAuthSheetOpen(false);
+      setDataSheetOpen(true);
+    }}
+  />
+)}
 
       </AnimatePresence>
 

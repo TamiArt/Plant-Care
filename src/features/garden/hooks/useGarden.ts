@@ -3,33 +3,63 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import type {
   PlantLocation,
   PlantNote,
   PlantReminder,
   UserPlant,
 } from "../types";
-import type { PreparedPhoto } from "../services/preparePhoto";
+
+import type {
+  PreparedPhoto,
+} from "../services/preparePhoto";
+
 import {
-  deletePlant as deletePlantFromDb,
+  getAllPlantRecords,
   getAllPlants,
+  replaceAllPlantRecords,
   replacePlants as replacePlantsInDb,
   savePlant,
+  softDeletePlant,
   type SavePlantPhotoInput,
 } from "../repository/gardenRepository";
-import { migrateLegacyStorage } from "../repository/migrateLegacyStorage";
+
+import {
+  migrateLegacyStorage,
+} from "../repository/migrateLegacyStorage";
+
+import {
+  migrateSyncMetadata,
+} from "../repository/migrateSyncMetadata";
+
+import {
+  syncGarden,
+} from "../sync/syncGarden";
 
 function todayStr(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date()
+    .toISOString()
+    .split("T")[0];
+}
+
+function nowIso(): string {
+  return new Date()
+    .toISOString();
 }
 
 function createId(): string {
-  if (typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto.randomUUID ===
+    "function"
+  ) {
     return crypto.randomUUID();
   }
 
   return (
-    Math.random().toString(36).slice(2) +
+    Math.random()
+      .toString(36)
+      .slice(2) +
     Date.now().toString(36)
   );
 }
@@ -39,30 +69,97 @@ export interface GardenOperationResult {
   error?: string;
 }
 
+export type GardenSyncStatus =
+  | "idle"
+  | "syncing"
+  | "synced"
+  | "offline"
+  | "error";
+
+export interface GardenSyncResult
+  extends GardenOperationResult {
+  syncedAt?: string;
+}
+
 export interface AddPlantInput {
   catalogId: string | null;
+
   nickname: string;
+
   wateringInterval: number;
+
   location?: PlantLocation;
+
   photo?: PreparedPhoto | null;
+
   extra?: Partial<UserPlant>;
 }
 
 export interface UpdatePlantPhotoOptions {
-  photo?: PreparedPhoto | null;
+  photo?:
+    | PreparedPhoto
+    | null;
+
   removePhoto?: boolean;
 }
 
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
+function errorMessage(
+  error: unknown,
+): string {
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
     return error.message;
   }
 
   return "Не удалось сохранить данные.";
 }
 
-function sanitizeImportedPlant(plant: UserPlant): UserPlant {
-  const value = plant as UserPlant & { photo?: unknown };
+function createdAtFromPlant(
+  plant: Partial<UserPlant>,
+  fallback: string,
+): string {
+  if (
+    typeof plant.createdAt ===
+      "string" &&
+    Number.isFinite(
+      Date.parse(
+        plant.createdAt,
+      ),
+    )
+  ) {
+    return plant.createdAt;
+  }
+
+  if (
+    typeof plant.addedAt ===
+      "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      plant.addedAt,
+    )
+  ) {
+    return `${plant.addedAt}T00:00:00.000Z`;
+  }
+
+  return fallback;
+}
+
+/**
+ * Импорт из резервной копии считается
+ * новым локальным изменением.
+ *
+ * Поэтому updatedAt = время импорта.
+ */
+function sanitizeImportedPlant(
+  plant: UserPlant,
+  importTime: string,
+): UserPlant {
+  const value =
+    plant as UserPlant & {
+      photo?: unknown;
+    };
+
   const {
     photo: _legacyPhoto,
     ...withoutLegacyPhoto
@@ -70,38 +167,111 @@ function sanitizeImportedPlant(plant: UserPlant): UserPlant {
 
   return {
     ...withoutLegacyPhoto,
+
     photoId:
-      typeof withoutLegacyPhoto.photoId === "string"
-        ? withoutLegacyPhoto.photoId
+      typeof withoutLegacyPhoto
+        .photoId === "string"
+        ? withoutLegacyPhoto
+            .photoId
         : null,
+
+    createdAt:
+      createdAtFromPlant(
+        withoutLegacyPhoto,
+        importTime,
+      ),
+
+    updatedAt:
+      importTime,
+
+    deletedAt: null,
   };
 }
 
 export function useGarden() {
-  const [plants, setPlants] = useState<UserPlant[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [storageError, setStorageError] =
-    useState<string | null>(null);
+  const [
+    plants,
+    setPlants,
+  ] = useState<UserPlant[]>(
+    [],
+  );
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    storageError,
+    setStorageError,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    syncStatus,
+    setSyncStatus,
+  ] =
+    useState<GardenSyncStatus>(
+      "idle",
+    );
+
+  const [
+    syncError,
+    setSyncError,
+  ] = useState<
+    string | null
+  >(null);
+
+  const [
+    lastSyncedAt,
+    setLastSyncedAt,
+  ] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     let active = true;
 
     void (async () => {
       try {
+        /*
+         * 1. Старая migration:
+         * localStorage → IndexedDB.
+         */
         await migrateLegacyStorage();
-        const storedPlants = await getAllPlants();
+
+        /*
+         * 2. Новая migration:
+         * timestamps для sync.
+         */
+        await migrateSyncMetadata();
+
+        const storedPlants =
+          await getAllPlants();
 
         if (active) {
-          setPlants(storedPlants);
-          setStorageError(null);
+          setPlants(
+            storedPlants,
+          );
+
+          setStorageError(
+            null,
+          );
         }
       } catch (error) {
         if (active) {
-          setStorageError(errorMessage(error));
+          setStorageError(
+            errorMessage(
+              error,
+            ),
+          );
         }
       } finally {
         if (active) {
-          setIsLoading(false);
+          setIsLoading(
+            false,
+          );
         }
       }
     })();
@@ -111,364 +281,820 @@ export function useGarden() {
     };
   }, []);
 
-  const execute = useCallback(
-    async (
-      operation: () => Promise<void>,
-    ): Promise<GardenOperationResult> => {
-      try {
-        await operation();
-        setStorageError(null);
+  const execute =
+    useCallback(
+      async (
+        operation:
+          () => Promise<void>,
+      ): Promise<
+        GardenOperationResult
+      > => {
+        try {
+          await operation();
 
-        return { ok: true };
-      } catch (error) {
-        const message = errorMessage(error);
-        setStorageError(message);
+          setStorageError(
+            null,
+          );
 
-        return {
-          ok: false,
-          error: message,
-        };
-      }
-    },
-    [],
-  );
+          return {
+            ok: true,
+          };
+        } catch (error) {
+          const message =
+            errorMessage(
+              error,
+            );
 
-  const addPlant = useCallback(
-    async ({
-      catalogId,
-      nickname,
-      wateringInterval,
-      location = "home",
-      photo = null,
-      extra = {},
-    }: AddPlantInput): Promise<GardenOperationResult> => {
-      const plantId = createId();
-      const photoId = photo ? createId() : null;
+          setStorageError(
+            message,
+          );
 
-const plant: UserPlant = {
-  ...extra,
+          return {
+            ok: false,
+            error: message,
+          };
+        }
+      },
+      [],
+    );
 
-  id: plantId,
-  catalogId,
-  nickname,
-  photoId,
-  wateringInterval,
-  location,
-
-  wateringHistory:
-    extra.wateringHistory ?? [],
-
-  mistingHistory:
-    extra.mistingHistory ?? [],
-
-  fertilizingInterval:
-    extra.fertilizingInterval ?? 30,
-
-  fertilizingHistory:
-    extra.fertilizingHistory ?? [],
-
-  notes:
-    extra.notes ?? [],
-
-  reminders:
-    extra.reminders ?? [],
-
-  addedAt:
-    extra.addedAt ?? todayStr(),
-};
-
-      return execute(async () => {
-        const photoRecord: SavePlantPhotoInput | null =
-          photo && photoId
-            ? {
-                id: photoId,
-                plantId,
-                blob: photo.blob,
-                mimeType: photo.mimeType,
-                width: photo.width,
-                height: photo.height,
-              }
-            : null;
-
-        await savePlant(plant, photoRecord);
-        setPlants(current => [...current, plant]);
-      });
-    },
-    [execute],
-  );
-
-  const updatePlant = useCallback(
-    async (
-      id: string,
-      changes: Partial<UserPlant>,
-      photoOptions: UpdatePlantPhotoOptions = {},
-    ): Promise<GardenOperationResult> => {
-      const currentPlant = plants.find(
-        plant => plant.id === id,
-      );
-
-      if (!currentPlant) {
-        return {
-          ok: false,
-          error: "Растение не найдено.",
-        };
-      }
-
-      const {
+  const addPlant =
+    useCallback(
+      async ({
+        catalogId,
+        nickname,
+        wateringInterval,
+        location = "home",
         photo = null,
-        removePhoto = false,
-      } = photoOptions;
+        extra = {},
+      }: AddPlantInput): Promise<
+        GardenOperationResult
+      > => {
+        const plantId =
+          createId();
 
-      const nextPhotoId = photo
-        ? createId()
-        : removePhoto
-          ? null
-          : currentPlant.photoId;
-
-      const nextPlant: UserPlant = {
-        ...currentPlant,
-        ...changes,
-        id: currentPlant.id,
-        photoId: nextPhotoId,
-      };
-
-      return execute(async () => {
-        const photoRecord: SavePlantPhotoInput | null =
-          photo && nextPhotoId
-            ? {
-                id: nextPhotoId,
-                plantId: id,
-                blob: photo.blob,
-                mimeType: photo.mimeType,
-                width: photo.width,
-                height: photo.height,
-              }
+        const photoId =
+          photo
+            ? createId()
             : null;
 
-        await savePlant(
-          nextPlant,
-          photoRecord,
-          photo || removePhoto
-            ? currentPlant.photoId
-            : null,
-        );
+        const timestamp =
+          nowIso();
 
-        setPlants(current =>
-          current.map(plant =>
-            plant.id === id ? nextPlant : plant,
-          ),
-        );
-      });
-    },
-    [execute, plants],
-  );
+        const plant:
+          UserPlant = {
+          ...extra,
 
-  const removePlant = useCallback(
-    async (id: string): Promise<GardenOperationResult> => {
-      const plant = plants.find(item => item.id === id);
+          id:
+            plantId,
 
-      if (!plant) {
-        return {
-          ok: false,
-          error: "Растение не найдено.",
+          catalogId,
+
+          nickname,
+
+          photoId,
+
+          wateringInterval,
+
+          location,
+
+          wateringHistory:
+            extra
+              .wateringHistory ??
+            [],
+
+          mistingHistory:
+            extra
+              .mistingHistory ??
+            [],
+
+          fertilizingInterval:
+            extra
+              .fertilizingInterval ??
+            30,
+
+          fertilizingHistory:
+            extra
+              .fertilizingHistory ??
+            [],
+
+          notes:
+            extra.notes ??
+            [],
+
+          reminders:
+            extra.reminders ??
+            [],
+
+          addedAt:
+            extra.addedAt ??
+            todayStr(),
+
+          createdAt:
+            timestamp,
+
+          updatedAt:
+            timestamp,
+
+          deletedAt:
+            null,
         };
-      }
 
-      return execute(async () => {
-        await deletePlantFromDb(plant);
-        setPlants(current =>
-          current.filter(item => item.id !== id),
+        return execute(
+          async () => {
+            const photoRecord:
+              | SavePlantPhotoInput
+              | null =
+              photo &&
+              photoId
+                ? {
+                    id:
+                      photoId,
+
+                    plantId,
+
+                    blob:
+                      photo.blob,
+
+                    mimeType:
+                      photo.mimeType,
+
+                    width:
+                      photo.width,
+
+                    height:
+                      photo.height,
+                  }
+                : null;
+
+            await savePlant(
+              plant,
+              photoRecord,
+            );
+
+            setPlants(
+              current => [
+                ...current,
+                plant,
+              ],
+            );
+          },
         );
-      });
-    },
-    [execute, plants],
-  );
+      },
+      [execute],
+    );
 
-  const mutatePlant = useCallback(
-    async (
-      id: string,
-      mutate: (plant: UserPlant) => UserPlant,
-    ): Promise<GardenOperationResult> => {
-      const currentPlant = plants.find(
-        plant => plant.id === id,
-      );
+  const updatePlant =
+    useCallback(
+      async (
+        id: string,
 
-      if (!currentPlant) {
-        return {
-          ok: false,
-          error: "Растение не найдено.",
+        changes:
+          Partial<UserPlant>,
+
+        photoOptions:
+          UpdatePlantPhotoOptions =
+            {},
+      ): Promise<
+        GardenOperationResult
+      > => {
+        const currentPlant =
+          plants.find(
+            plant =>
+              plant.id === id,
+          );
+
+        if (!currentPlant) {
+          return {
+            ok: false,
+            error:
+              "Растение не найдено.",
+          };
+        }
+
+        const {
+          photo = null,
+          removePhoto = false,
+        } = photoOptions;
+
+        const nextPhotoId =
+          photo
+            ? createId()
+            : removePhoto
+              ? null
+              : currentPlant
+                  .photoId;
+
+        const nextPlant:
+          UserPlant = {
+          ...currentPlant,
+
+          ...changes,
+
+          id:
+            currentPlant.id,
+
+          photoId:
+            nextPhotoId,
+
+          createdAt:
+            currentPlant
+              .createdAt,
+
+          updatedAt:
+            nowIso(),
+
+          deletedAt:
+            null,
         };
-      }
 
-      const nextPlant = mutate(currentPlant);
+        return execute(
+          async () => {
+            const photoRecord:
+              | SavePlantPhotoInput
+              | null =
+              photo &&
+              nextPhotoId
+                ? {
+                    id:
+                      nextPhotoId,
 
-      return execute(async () => {
-        await savePlant(nextPlant);
+                    plantId:
+                      id,
 
-        setPlants(current =>
-          current.map(plant =>
-            plant.id === id ? nextPlant : plant,
-          ),
+                    blob:
+                      photo.blob,
+
+                    mimeType:
+                      photo.mimeType,
+
+                    width:
+                      photo.width,
+
+                    height:
+                      photo.height,
+                  }
+                : null;
+
+            await savePlant(
+              nextPlant,
+              photoRecord,
+              photo ||
+                removePhoto
+                ? currentPlant
+                    .photoId
+                : null,
+            );
+
+            setPlants(
+              current =>
+                current.map(
+                  plant =>
+                    plant.id ===
+                    id
+                      ? nextPlant
+                      : plant,
+                ),
+            );
+          },
         );
-      });
-    },
-    [execute, plants],
-  );
+      },
+      [
+        execute,
+        plants,
+      ],
+    );
 
-  const addHistoryEntry = useCallback(
-    (
-      id: string,
-      field:
-        | "wateringHistory"
-        | "mistingHistory"
-        | "fertilizingHistory",
-    ) =>
-      mutatePlant(id, plant => ({
-        ...plant,
-        [field]: [...plant[field], todayStr()],
-      })),
-    [mutatePlant],
-  );
+  const removePlant =
+    useCallback(
+      async (
+        id: string,
+      ): Promise<
+        GardenOperationResult
+      > => {
+        const plant =
+          plants.find(
+            item =>
+              item.id === id,
+          );
 
-  const addNote = useCallback(
-    (id: string, content: string) => {
-      const note: PlantNote = {
-        id: createId(),
-        createdAt: todayStr(),
-        content,
-      };
+        if (!plant) {
+          return {
+            ok: false,
+            error:
+              "Растение не найдено.",
+          };
+        }
 
-      return mutatePlant(id, plant => ({
-        ...plant,
-        notes: [...plant.notes, note],
-      }));
-    },
-    [mutatePlant],
-  );
+        const timestamp =
+          nowIso();
 
-  const updateNote = useCallback(
-    (
-      plantId: string,
-      noteId: string,
-      content: string,
-    ) =>
-      mutatePlant(plantId, plant => ({
-        ...plant,
-        notes: plant.notes.map(note =>
-          note.id === noteId
-            ? { ...note, content }
-            : note,
+        const tombstone:
+          UserPlant = {
+          ...plant,
+
+          updatedAt:
+            timestamp,
+
+          deletedAt:
+            timestamp,
+        };
+
+        return execute(
+          async () => {
+            await softDeletePlant(
+              tombstone,
+            );
+
+            setPlants(
+              current =>
+                current.filter(
+                  item =>
+                    item.id !== id,
+                ),
+            );
+          },
+        );
+      },
+      [
+        execute,
+        plants,
+      ],
+    );
+
+  const mutatePlant =
+    useCallback(
+      async (
+        id: string,
+
+        mutate:
+          (
+            plant:
+              UserPlant,
+          ) => UserPlant,
+      ): Promise<
+        GardenOperationResult
+      > => {
+        const currentPlant =
+          plants.find(
+            plant =>
+              plant.id === id,
+          );
+
+        if (!currentPlant) {
+          return {
+            ok: false,
+            error:
+              "Растение не найдено.",
+          };
+        }
+
+        const mutated =
+          mutate(
+            currentPlant,
+          );
+
+        const nextPlant:
+          UserPlant = {
+          ...mutated,
+
+          id:
+            currentPlant.id,
+
+          createdAt:
+            currentPlant
+              .createdAt,
+
+          updatedAt:
+            nowIso(),
+
+          deletedAt:
+            null,
+        };
+
+        return execute(
+          async () => {
+            await savePlant(
+              nextPlant,
+            );
+
+            setPlants(
+              current =>
+                current.map(
+                  plant =>
+                    plant.id ===
+                    id
+                      ? nextPlant
+                      : plant,
+                ),
+            );
+          },
+        );
+      },
+      [
+        execute,
+        plants,
+      ],
+    );
+
+  const addHistoryEntry =
+    useCallback(
+      (
+        id: string,
+
+        field:
+          | "wateringHistory"
+          | "mistingHistory"
+          | "fertilizingHistory",
+      ) =>
+        mutatePlant(
+          id,
+          plant => ({
+            ...plant,
+
+            [field]: [
+              ...plant[field],
+              todayStr(),
+            ],
+          }),
         ),
-      })),
-    [mutatePlant],
-  );
+      [mutatePlant],
+    );
 
-  const deleteNote = useCallback(
-    (plantId: string, noteId: string) =>
-      mutatePlant(plantId, plant => ({
-        ...plant,
-        notes: plant.notes.filter(
-          note => note.id !== noteId,
+  const addNote =
+    useCallback(
+      (
+        id: string,
+        content: string,
+      ) => {
+        const note:
+          PlantNote = {
+          id:
+            createId(),
+
+          createdAt:
+            todayStr(),
+
+          content,
+        };
+
+        return mutatePlant(
+          id,
+          plant => ({
+            ...plant,
+
+            notes: [
+              ...plant.notes,
+              note,
+            ],
+          }),
+        );
+      },
+      [mutatePlant],
+    );
+
+  const updateNote =
+    useCallback(
+      (
+        plantId: string,
+        noteId: string,
+        content: string,
+      ) =>
+        mutatePlant(
+          plantId,
+          plant => ({
+            ...plant,
+
+            notes:
+              plant.notes.map(
+                note =>
+                  note.id ===
+                  noteId
+                    ? {
+                        ...note,
+                        content,
+                      }
+                    : note,
+              ),
+          }),
         ),
-      })),
-    [mutatePlant],
-  );
+      [mutatePlant],
+    );
 
-  const addReminder = useCallback(
-    (
-      plantId: string,
-      title: string,
-      date: string,
-    ) => {
-      const reminder: PlantReminder = {
-        id: createId(),
-        title,
-        date,
-        done: false,
-      };
+  const deleteNote =
+    useCallback(
+      (
+        plantId: string,
+        noteId: string,
+      ) =>
+        mutatePlant(
+          plantId,
+          plant => ({
+            ...plant,
 
-      return mutatePlant(plantId, plant => ({
-        ...plant,
-        reminders: [
-          ...plant.reminders,
-          reminder,
-        ],
-      }));
-    },
-    [mutatePlant],
-  );
-
-  const toggleReminder = useCallback(
-    (plantId: string, reminderId: string) =>
-      mutatePlant(plantId, plant => ({
-        ...plant,
-        reminders: plant.reminders.map(reminder =>
-          reminder.id === reminderId
-            ? {
-                ...reminder,
-                done: !reminder.done,
-              }
-            : reminder,
+            notes:
+              plant.notes.filter(
+                note =>
+                  note.id !==
+                  noteId,
+              ),
+          }),
         ),
-      })),
-    [mutatePlant],
-  );
+      [mutatePlant],
+    );
 
-  const deleteReminder = useCallback(
-    (plantId: string, reminderId: string) =>
-      mutatePlant(plantId, plant => ({
-        ...plant,
-        reminders: plant.reminders.filter(
-          reminder => reminder.id !== reminderId,
+  const addReminder =
+    useCallback(
+      (
+        plantId: string,
+        title: string,
+        date: string,
+      ) => {
+        const reminder:
+          PlantReminder = {
+          id:
+            createId(),
+
+          title,
+          date,
+
+          done: false,
+        };
+
+        return mutatePlant(
+          plantId,
+          plant => ({
+            ...plant,
+
+            reminders: [
+              ...plant.reminders,
+              reminder,
+            ],
+          }),
+        );
+      },
+      [mutatePlant],
+    );
+
+  const toggleReminder =
+    useCallback(
+      (
+        plantId: string,
+        reminderId: string,
+      ) =>
+        mutatePlant(
+          plantId,
+          plant => ({
+            ...plant,
+
+            reminders:
+              plant.reminders.map(
+                reminder =>
+                  reminder.id ===
+                  reminderId
+                    ? {
+                        ...reminder,
+
+                        done:
+                          !reminder
+                            .done,
+                      }
+                    : reminder,
+              ),
+          }),
         ),
-      })),
-    [mutatePlant],
-  );
+      [mutatePlant],
+    );
 
-  const replacePlants = useCallback(
-    async (
-      nextPlants: UserPlant[],
-    ): Promise<GardenOperationResult> => {
-      const sanitized = nextPlants.map(
-        sanitizeImportedPlant,
-      );
+  const deleteReminder =
+    useCallback(
+      (
+        plantId: string,
+        reminderId: string,
+      ) =>
+        mutatePlant(
+          plantId,
+          plant => ({
+            ...plant,
 
-      return execute(async () => {
-        await replacePlantsInDb(sanitized);
-        setPlants(sanitized);
-      });
-    },
-    [execute],
-  );
+            reminders:
+              plant.reminders.filter(
+                reminder =>
+                  reminder.id !==
+                  reminderId,
+              ),
+          }),
+        ),
+      [mutatePlant],
+    );
 
-  const reload = useCallback(
-    async (): Promise<GardenOperationResult> =>
-      execute(async () => {
-        setPlants(await getAllPlants());
-      }),
-    [execute],
-  );
+  const replacePlants =
+    useCallback(
+      async (
+        nextPlants:
+          UserPlant[],
+      ): Promise<
+        GardenOperationResult
+      > => {
+        const importTime =
+          nowIso();
+
+        const sanitized =
+          nextPlants.map(
+            plant =>
+              sanitizeImportedPlant(
+                plant,
+                importTime,
+              ),
+          );
+
+        return execute(
+          async () => {
+            await replacePlantsInDb(
+              sanitized,
+            );
+
+            setPlants(
+              sanitized.filter(
+                plant =>
+                  plant.deletedAt ===
+                  null,
+              ),
+            );
+          },
+        );
+      },
+      [execute],
+    );
+
+  const reload =
+    useCallback(
+      async (): Promise<
+        GardenOperationResult
+      > =>
+        execute(
+          async () => {
+            setPlants(
+              await getAllPlants(),
+            );
+          },
+        ),
+      [execute],
+    );
+
+  /**
+   * Полная двусторонняя
+   * синхронизация растений.
+   *
+   * Вызывается только когда
+   * пользователь авторизован.
+   */
+  const syncWithCloud =
+    useCallback(
+      async (): Promise<
+        GardenSyncResult
+      > => {
+        if (
+          typeof navigator !==
+            "undefined" &&
+          !navigator.onLine
+        ) {
+          setSyncStatus(
+            "offline",
+          );
+
+          setSyncError(
+            null,
+          );
+
+          return {
+            ok: false,
+
+            error:
+              "Нет подключения к интернету.",
+          };
+        }
+
+        setSyncStatus(
+          "syncing",
+        );
+
+        setSyncError(
+          null,
+        );
+
+        try {
+          const localRecords =
+            await getAllPlantRecords();
+
+          const result =
+            await syncGarden(
+              localRecords,
+            );
+
+          await replaceAllPlantRecords(
+            result.plants,
+          );
+
+          setPlants(
+            result.plants.filter(
+              plant =>
+                plant.deletedAt ===
+                null,
+            ),
+          );
+
+          setLastSyncedAt(
+            result.syncedAt,
+          );
+
+          setSyncStatus(
+            "synced",
+          );
+
+          return {
+            ok: true,
+
+            syncedAt:
+              result.syncedAt,
+          };
+        } catch (error) {
+          const message =
+            errorMessage(
+              error,
+            );
+
+          setSyncStatus(
+            "error",
+          );
+
+          setSyncError(
+            message,
+          );
+
+          return {
+            ok: false,
+            error: message,
+          };
+        }
+      },
+      [],
+    );
 
   return {
     plants,
+
     isLoading,
+
     storageError,
+
+    syncStatus,
+    syncError,
+    lastSyncedAt,
+
     reload,
+
+    syncWithCloud,
+
     addPlant,
+
     removePlant,
+
     updatePlant,
+
     replacePlants,
-    waterPlant: (id: string) =>
-      addHistoryEntry(id, "wateringHistory"),
-    mistPlant: (id: string) =>
-      addHistoryEntry(id, "mistingHistory"),
-    fertilizePlant: (id: string) =>
-      addHistoryEntry(id, "fertilizingHistory"),
+
+    waterPlant:
+      (id: string) =>
+        addHistoryEntry(
+          id,
+          "wateringHistory",
+        ),
+
+    mistPlant:
+      (id: string) =>
+        addHistoryEntry(
+          id,
+          "mistingHistory",
+        ),
+
+    fertilizePlant:
+      (id: string) =>
+        addHistoryEntry(
+          id,
+          "fertilizingHistory",
+        ),
+
     addNote,
+
     updateNote,
+
     deleteNote,
+
     addReminder,
+
     toggleReminder,
+
     deleteReminder,
   };
 }

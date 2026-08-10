@@ -5,5 +5,12 @@ dist/
 .vercel/
 *.local
 .DS_Store
+worker/.dev.vars
+worker/.dev.vars.*
+.dev.vars
+.dev.vars.*
+.wrangler/
+worker/.wrangler/
 
+plantcare-local-export.sql
 
