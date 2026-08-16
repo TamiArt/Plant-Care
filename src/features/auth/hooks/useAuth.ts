@@ -39,6 +39,8 @@ export function useAuth() {
         setUser(current.user);
         setSession(current.session);
         setError(null);
+
+        return current;
       } catch (reason) {
         console.error(
           "Auth session loading failed:",
@@ -49,8 +51,12 @@ export function useAuth() {
         setSession(null);
 
         setError(
-          "Не удалось проверить аккаунт.",
+          reason instanceof Error
+            ? reason.message
+            : "Не удалось проверить аккаунт.",
         );
+
+        throw reason;
       }
     }, []);
 
@@ -113,7 +119,25 @@ export function useAuth() {
         return result;
       }
 
-      await refreshSession();
+      try {
+        const current = await refreshSession();
+
+        if (!current.user || !current.session) {
+          const failure = {
+            ok: false,
+            error: "Аккаунт создан, но сервер не открыл сессию. Повторите вход с указанной почтой.",
+          };
+          setError(failure.error);
+          return failure;
+        }
+      } catch (reason) {
+        return {
+          ok: false,
+          error: reason instanceof Error
+            ? reason.message
+            : "Не удалось подтвердить создание аккаунта.",
+        };
+      }
 
       return {
         ok: true,
@@ -144,7 +168,25 @@ export function useAuth() {
         return result;
       }
 
-      await refreshSession();
+      try {
+        const current = await refreshSession();
+
+        if (!current.user || !current.session) {
+          const failure = {
+            ok: false,
+            error: "Данные приняты, но сессия не появилась. Разрешите cookies для сайта и повторите вход.",
+          };
+          setError(failure.error);
+          return failure;
+        }
+      } catch (reason) {
+        return {
+          ok: false,
+          error: reason instanceof Error
+            ? reason.message
+            : "Не удалось подтвердить вход.",
+        };
+      }
 
       return {
         ok: true,

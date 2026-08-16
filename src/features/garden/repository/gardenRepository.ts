@@ -6,6 +6,7 @@ import type {
 import {
   getGardenDb,
 } from "./gardenDb";
+import { getPlantPhotoIds } from "../model/photos";
 
 export interface SavePlantPhotoInput {
   id: string;
@@ -74,6 +75,13 @@ function normalizePlantRecord(
             .photoId
         : null,
 
+    photoIds: getPlantPhotoIds({
+      photoId: typeof withoutLegacyPhoto.photoId === "string" ? withoutLegacyPhoto.photoId : null,
+      photoIds: Array.isArray(withoutLegacyPhoto.photoIds)
+        ? withoutLegacyPhoto.photoIds.filter((id): id is string => typeof id === "string")
+        : undefined,
+    }),
+
     createdAt,
 
     updatedAt:
@@ -94,6 +102,24 @@ function normalizePlantRecord(
             .deletedAt
         : null,
   };
+}
+
+export async function savePlantPhotoGallery(
+  plant: UserPlant,
+  newPhotos: SavePlantPhotoInput[],
+  removedPhotoIds: string[],
+): Promise<void> {
+  const database = await getGardenDb();
+  const transaction = database.transaction(["plants", "photos"], "readwrite");
+  const plantStore = transaction.objectStore("plants");
+  const photoStore = transaction.objectStore("photos");
+
+  for (const photoId of removedPhotoIds) await photoStore.delete(photoId);
+  for (const photo of newPhotos) {
+    await photoStore.put({ ...photo, createdAt: new Date().toISOString() });
+  }
+  await plantStore.put(normalizePlantRecord(plant));
+  await transaction.done;
 }
 
 /**
@@ -366,6 +392,28 @@ export async function replaceAllPlantRecords(
       ),
     );
   }
+
+  await transaction.done;
+}
+
+/**
+ * Удаляет данные сада только с текущего устройства.
+ *
+ * Используется после выхода из аккаунта. Облачные записи при этом не
+ * изменяются: пользователь снова получит их после следующего входа и sync.
+ */
+export async function clearLocalGarden(): Promise<void> {
+  const database = await getGardenDb();
+  const transaction = database.transaction(
+    ["plants", "photos", "meta"],
+    "readwrite",
+  );
+
+  await Promise.all([
+    transaction.objectStore("plants").clear(),
+    transaction.objectStore("photos").clear(),
+    transaction.objectStore("meta").clear(),
+  ]);
 
   await transaction.done;
 }

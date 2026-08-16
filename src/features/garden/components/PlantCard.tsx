@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
 import { ChevronRight, Droplets, Wind } from "lucide-react";
 import { PlantImage, type PlantImageSource } from "../../../shared/components/PlantImage";
+import { isMistedToday } from "../model/misting";
+import { getLatestPlantPhotoId } from "../model/photos";
 import { getWateringStatus } from "../model/watering";
 import type { PlantDisplay, UserPlant } from "../types";
 import { WateringIndicator } from "./WateringIndicator";
@@ -16,7 +18,7 @@ export interface PlantCardProps {
 
 export function PlantCard({ plant, display, catalogPlant, onWater, onMist, onOpen }: PlantCardProps) {
   const status = getWateringStatus(plant);
-  const mistToday = plant.mistingHistory[plant.mistingHistory.length - 1] === new Date().toISOString().split("T")[0];
+  const mistToday = isMistedToday(plant.mistingHistory);
   const urgent = status.color === "red";
 
   return (
@@ -24,7 +26,7 @@ export function PlantCard({ plant, display, catalogPlant, onWater, onMist, onOpe
       className={`bg-card rounded-3xl border shadow-sm overflow-hidden ${urgent ? "border-red-200" : "border-border"}`}>
       <button onClick={onOpen} className="flex w-full items-stretch text-left">
         <div className="relative flex-shrink-0">
-          <PlantImage catalogPlant={catalogPlant} photoId={plant.photoId} emoji={display.emoji} className="w-24 h-24" />
+          <PlantImage catalogPlant={catalogPlant} photoId={getLatestPlantPhotoId(plant)} emoji={display.emoji} className="w-24 h-24" />
           {urgent && <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
             <Droplets size={11} className="text-white" />
           </div>}
@@ -44,10 +46,11 @@ export function PlantCard({ plant, display, catalogPlant, onWater, onMist, onOpe
         <button onClick={onWater} className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${urgent ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground hover:text-primary"}`}>
           <Droplets size={14} /> Полить
         </button>
-        {display.needsMisting && <><div className="w-px bg-border" /><button onClick={onMist}
+        <div className="w-px bg-border" /><button onClick={onMist} disabled={mistToday}
+          aria-label={mistToday ? "Растение опрыснуто сегодня" : "Отметить опрыскивание растения"}
           className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${mistToday ? "text-sky-600 bg-sky-50" : "text-muted-foreground hover:text-sky-600"}`}>
           <Wind size={14} /> {mistToday ? "Опрыснуто ✓" : "Опрыснуть"}
-        </button></>}
+        </button>
       </div>
     </motion.div>
   );

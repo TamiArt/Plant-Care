@@ -2,10 +2,13 @@ import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Bell, CheckSquare, Droplets, FlaskConical, Home, List, Pencil, Plus, Square, StickyNote, Trash2, Trees, Wind, X } from "lucide-react";
 import { PlantImage, type PlantImageSource } from "../../../shared/components/PlantImage";
+import { isMistedToday } from "../model/misting";
+import { getLatestPlantPhotoId } from "../model/photos";
 import { daysSince, getWateringStatus, type WateringStatus } from "../model/watering";
 import { insertNotePrefix } from "../noteUtils";
 import type { PlantDisplay, PlantLocation, UserPlant } from "../types";
 import { NoteContent } from "./NoteContent";
+import { PlantPhotoGallery } from "./PlantPhotoGallery";
 
 type PlantTab = "care" | "notes" | "reminders";
 type Difficulty = "easy" | "medium" | "hard";
@@ -43,6 +46,7 @@ export function UserPlantSheet({
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState(todayStr());
   const fertToday = up.fertilizingHistory[up.fertilizingHistory.length - 1] === todayStr();
+  const mistToday = isMistedToday(up.mistingHistory);
   const lastFert = up.fertilizingHistory[up.fertilizingHistory.length - 1];
   const fertDaysUntil = up.fertilizingInterval > 0 && lastFert
     ? up.fertilizingInterval - daysSince(lastFert)
@@ -74,13 +78,15 @@ export function UserPlantSheet({
         <div className="flex-1 overflow-y-auto">
           {/* Hero image */}
           <div className="relative">
-            <PlantImage catalogPlant={catalogPlant} photoId={up.photoId} emoji={display.emoji} className="w-full h-48" />
+            <PlantImage catalogPlant={catalogPlant} photoId={getLatestPlantPhotoId(up)} emoji={display.emoji} className="w-full h-48" />
             <button onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
             >
               <X size={18} />
             </button>
           </div>
+
+          <PlantPhotoGallery plant={up} />
 
           <div className="px-5 pt-3">
             {/* Header */}
@@ -110,6 +116,9 @@ export function UserPlantSheet({
                   <FlaskConical size={10} /> Удобрить
                 </span>
               )}
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${mistToday ? "bg-sky-100 text-sky-700" : "bg-secondary text-muted-foreground"}`}>
+                <Wind size={10} /> {mistToday ? "Опрыснуто сегодня" : "Не опрыснуто сегодня"}
+              </span>
             </div>
 
             {/* Location toggle */}
@@ -152,6 +161,34 @@ export function UserPlantSheet({
                   </div>
                 </div>
 
+                {/* Misting */}
+                <div className="bg-card border border-border rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+                      <Wind size={11} /> Опрыскивание
+                    </p>
+                    <span className={`text-xs font-medium ${mistToday ? "text-sky-600" : "text-muted-foreground"}`}>
+                      {mistToday ? "Опрыснуто сегодня ✓" : "Сегодня ещё не опрыскивали"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {up.mistingHistory.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Опрыскиваний пока нет</p>
+                    ) : (
+                      [...up.mistingHistory].reverse().slice(0, 6).map((date, index) => (
+                        <span key={`${date}-${index}`} className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full">
+                          💨 {formatDate(date)}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <button onClick={onMist} disabled={mistToday}
+                    className={`w-full py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${mistToday ? "bg-sky-50 text-sky-600" : "bg-sky-100 text-sky-700 hover:bg-sky-200"}`}
+                  >
+                    <Wind size={13} /> {mistToday ? "Опрыснуто сегодня ✓" : "Отметить опрыскивание"}
+                  </button>
+                </div>
+
                 {/* Fertilizing */}
                 <div className="bg-card border border-border rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -189,18 +226,6 @@ export function UserPlantSheet({
                     <div className="flex flex-wrap gap-2">
                       {[...up.wateringHistory].reverse().slice(0, 8).map((d, i) => (
                         <span key={i} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full">💧 {formatDate(d)}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Misting history */}
-                {display.needsMisting && up.mistingHistory.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">История опрыскивания</p>
-                    <div className="flex flex-wrap gap-2">
-                      {[...up.mistingHistory].reverse().slice(0, 6).map((d, i) => (
-                        <span key={i} className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full">💨 {formatDate(d)}</span>
                       ))}
                     </div>
                   </div>
@@ -333,13 +358,11 @@ export function UserPlantSheet({
           >
             <Droplets size={16} /> Полить
           </button>
-          {display.needsMisting && (
-            <button onClick={onMist}
-              className="flex-1 bg-sky-100 text-sky-700 py-3.5 rounded-2xl font-semibold flex items-center justify-center gap-2 text-sm"
-            >
-              <Wind size={16} /> Опрыснуть
-            </button>
-          )}
+          <button onClick={onMist} disabled={mistToday}
+            className={`flex-1 py-3.5 rounded-2xl font-semibold flex items-center justify-center gap-2 text-sm ${mistToday ? "bg-sky-50 text-sky-600" : "bg-sky-100 text-sky-700"}`}
+          >
+            <Wind size={16} /> {mistToday ? "Опрыснуто ✓" : "Опрыснуть"}
+          </button>
         </div>
       </motion.div>
     </div>

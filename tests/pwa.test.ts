@@ -24,6 +24,15 @@ test("Vercel always revalidates the service worker", () => {
   ));
 });
 
+test("service worker never caches authenticated API responses", () => {
+  const source = readFileSync("public/sw.js", "utf8");
+  const apiBypass = source.indexOf('url.pathname.startsWith("/api/")');
+  const cacheLookup = source.indexOf("caches.match(event.request)");
+
+  assert.ok(apiBypass > -1, "API bypass must exist");
+  assert.ok(cacheLookup > apiBypass, "API bypass must run before Cache Storage lookup");
+});
+
 test("manifest references the generated install icons", () => {
   const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
   const sources = manifest.icons.map((icon: { src: string }) => icon.src);

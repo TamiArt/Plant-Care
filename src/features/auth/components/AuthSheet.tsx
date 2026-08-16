@@ -23,6 +23,8 @@ type AuthMode =
   | "register";
 
 export interface AuthSheetProps {
+  notice?: string | null;
+
   onLogin: (
     email: string,
     password: string,
@@ -37,6 +39,7 @@ export interface AuthSheetProps {
 }
 
 export function AuthSheet({
+  notice,
   onLogin,
   onRegister,
   onClose,
@@ -78,17 +81,28 @@ export function AuthSheet({
       setIsSubmitting(true);
       setError("");
 
-      const result = isRegister
-        ? await onRegister(
-            email,
-            password,
-          )
-        : await onLogin(
-            email,
-            password,
-          );
+      let result: AuthResult;
 
-      setIsSubmitting(false);
+      try {
+        result = isRegister
+          ? await onRegister(
+              email,
+              password,
+            )
+          : await onLogin(
+              email,
+              password,
+            );
+      } catch (reason) {
+        result = {
+          ok: false,
+          error: reason instanceof Error
+            ? reason.message
+            : "Сервер аккаунтов недоступен.",
+        };
+      } finally {
+        setIsSubmitting(false);
+      }
 
       if (result.ok) {
         onClose();
@@ -181,6 +195,12 @@ export function AuthSheet({
         </div>
 
         <div className="space-y-4">
+          {notice && (
+            <div className="rounded-2xl bg-primary/10 px-3.5 py-3 text-sm leading-relaxed text-primary">
+              {notice}
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-foreground">
               Почта

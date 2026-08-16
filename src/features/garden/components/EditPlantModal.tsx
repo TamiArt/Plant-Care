@@ -16,6 +16,8 @@ import {
   type PreparedPhoto,
 } from "../services/preparePhoto";
 import type { UserPlant } from "../types";
+import { getPlantPhoto } from "../repository/gardenRepository";
+import { getPlantPhotoIds, MAX_PLANT_PHOTOS } from "../model/photos";
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
@@ -25,6 +27,39 @@ export interface EditPlantSaveData {
   changes: Partial<UserPlant>;
   photo: PreparedPhoto | null;
   removePhoto: boolean;
+  gallery: Array<{ index: number; photo: PreparedPhoto | null }>;
+}
+
+function PhotoSlot({ photoId, photo, onSelect, onRemove }: {
+  photoId?: string;
+  photo?: PreparedPhoto;
+  onSelect: () => void;
+  onRemove?: () => void;
+}) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    setPreview(null);
+    setDate("");
+    if (photo) {
+      const url = URL.createObjectURL(photo.blob);
+      setPreview(url);
+      setDate(new Date().toISOString());
+      return () => URL.revokeObjectURL(url);
+    }
+    if (photoId) void getPlantPhoto(photoId).then(value => setDate(value?.createdAt ?? ""));
+  }, [photo, photoId]);
+  return <div className="min-w-0">
+    <button type="button" onClick={onSelect} className="h-24 w-full overflow-hidden rounded-xl border border-border bg-secondary">
+      {preview || photoId
+        ? <PlantImage photoId={photo ? null : photoId} previewUrl={preview} className="h-full w-full" />
+        : <span className="flex h-full items-center justify-center text-muted-foreground"><ImagePlus size={22} /></span>}
+    </button>
+    <div className="mt-1 flex items-center justify-between gap-1">
+      <span className="truncate text-[10px] text-muted-foreground">{date ? new Date(date).toLocaleDateString("ru-RU") : "Добавить фото"}</span>
+      {(photoId || photo) && onRemove && <button type="button" onClick={onRemove} className="text-[10px] text-red-500">Удалить</button>}
+    </div>
+  </div>;
 }
 
 export function EditPlantModal({
@@ -60,29 +95,14 @@ export function EditPlantModal({
   ] = useState(up.fertilizingInterval);
   const [description, setDescription] =
     useState(up.customDescription ?? "");
-  const [newPhoto, setNewPhoto] =
-    useState<PreparedPhoto | null>(null);
-  const [previewUrl, setPreviewUrl] =
-    useState<string | null>(null);
-  const [removePhoto, setRemovePhoto] =
-    useState(false);
+  const initialPhotoIds = getPlantPhotoIds(up);
+  const [photoChanges, setPhotoChanges] = useState(new Map<number, PreparedPhoto | null>());
+  const selectedPhotoIndex = useRef(0);
   const [isPreparing, setIsPreparing] =
     useState(false);
   const [isSaving, setIsSaving] =
     useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!newPhoto) {
-      setPreviewUrl(null);
-      return;
-    }
-
-    const url = URL.createObjectURL(newPhoto.blob);
-    setPreviewUrl(url);
-
-    return () => URL.revokeObjectURL(url);
-  }, [newPhoto]);
 
   const handlePhoto = async (
     event: ChangeEvent<HTMLInputElement>,
@@ -98,8 +118,8 @@ export function EditPlantModal({
     setError("");
 
     try {
-      setNewPhoto(await preparePhoto(file));
-      setRemovePhoto(false);
+      const prepared = await preparePhoto(file);
+      setPhotoChanges(current => new Map(current).set(selectedPhotoIndex.current, prepared));
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -110,10 +130,6 @@ export function EditPlantModal({
       setIsPreparing(false);
     }
   };
-
-  const hasPhoto =
-    Boolean(newPhoto) ||
-    (!removePhoto && Boolean(up.photoId));
 
   const handleSave = async () => {
     if (
@@ -140,8 +156,9 @@ export function EditPlantModal({
         customDescription:
           description.trim() || undefined,
       },
-      photo: newPhoto,
-      removePhoto,
+      photo: null,
+      removePhoto: false,
+      gallery: [...photoChanges].map(([index, photo]) => ({ index, photo })),
     });
 
     setIsSaving(false);
@@ -180,17 +197,21 @@ export function EditPlantModal({
           </button>
         </div>
 
-        <div className="mb-4 overflow-hidden rounded-2xl bg-secondary">
-          <PlantImage
-            catalogPlant={catalogPlant}
-            photoId={
-              removePhoto ? null : up.photoId
-            }
-            previewUrl={previewUrl}
-            emoji={up.customEmoji}
-            className="h-40 w-full"
-          />
-          <div className="flex gap-2 p-3">
+        <div className="mb-4 rounded-2xl bg-secondary p-3">
+          <p className="mb-2 text-xs font-medium text-foreground">Фотографии · максимум {MAX_PLANT_PHOTOS}</p>
+          <div className="grid grid-cols-3 gap-2">
+            {Array.from({ length: MAX_PLANT_PHOTOS }, (_, index) => {
+              const changed = photoChanges.get(index);
+              const removed = photoChanges.has(index) && changed === null;
+              return <PhotoSlot key={index}
+                photoId={removed ? undefined : initialPhotoIds[index]}
+                photo={changed ?? undefined}
+                onSelect={() => { selectedPhotoIndex.current = index; fileRef.current?.click(); }}
+                onRemove={(initialPhotoIds[index] || changed) ? () => setPhotoChanges(current => new Map(current).set(index, null)) : undefined}
+              />;
+            })}
+          </div>
+          <div>
             <input
               ref={fileRef}
               type="file"
@@ -199,39 +220,8 @@ export function EditPlantModal({
               onChange={handlePhoto}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() =>
-                fileRef.current?.click()
-              }
-              disabled={isPreparing || isSaving}
-              className="flex-1 rounded-xl bg-card px-3 py-2.5 text-xs font-medium text-primary disabled:opacity-40"
-            >
-              <ImagePlus
-                size={14}
-                className="mr-1.5 inline"
-              />
-              {isPreparing
-                ? "Подготовка…"
-                : hasPhoto
-                  ? "Заменить фото"
-                  : "Добавить фото"}
-            </button>
-
-            {hasPhoto && (
-              <button
-                type="button"
-                onClick={() => {
-                  setNewPhoto(null);
-                  setRemovePhoto(true);
-                }}
-                disabled={isSaving}
-                className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-medium text-red-500 disabled:opacity-40"
-              >
-                Удалить
-              </button>
-            )}
           </div>
+          {isPreparing && <p className="mt-2 text-xs text-muted-foreground">Подготовка фотографии…</p>}
         </div>
 
         {error && (

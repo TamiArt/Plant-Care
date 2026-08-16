@@ -11,6 +11,7 @@ import {
 import {
   compressPhotoForCloud,
 } from "../../services/compressPhotoForCloud";
+import { getPlantPhotoIds } from "../../model/photos";
 
 import {
   downloadPhotoFromCloud,
@@ -35,14 +36,10 @@ export async function uploadLocalPhotos(
     >();
 
   for (const plant of plants) {
-    if (
-      plant.deletedAt === null &&
-      plant.photoId
-    ) {
-      plantsByPhotoId.set(
-        plant.photoId,
-        plant,
-      );
+    if (plant.deletedAt === null) {
+      for (const photoId of getPlantPhotoIds(plant)) {
+        plantsByPhotoId.set(photoId, plant);
+      }
     }
   }
 
@@ -129,50 +126,43 @@ export async function downloadMissingPhotos(
   plants: UserPlant[],
 ): Promise<void> {
   for (const plant of plants) {
-    if (
-      plant.deletedAt !==
-        null ||
-      !plant.photoId
-    ) {
+    if (plant.deletedAt !== null) {
       continue;
     }
 
-    const existing =
-      await getPlantPhoto(
-        plant.photoId,
-      );
+    for (const photoId of getPlantPhotoIds(plant)) {
+      const existing = await getPlantPhoto(photoId);
 
-    if (existing) {
-      continue;
-    }
+      if (existing) {
+        continue;
+      }
 
-    const remote =
-      await downloadPhotoFromCloud(
-        plant.photoId,
-      );
+      const remote =
+        await downloadPhotoFromCloud(
+          photoId,
+        );
 
-    if (!remote) {
-      continue;
-    }
+      if (!remote) {
+        continue;
+      }
 
-    await saveDownloadedPhoto({
-      id:
-        plant.photoId,
+      await saveDownloadedPhoto({
+        id: photoId,
 
-      plantId:
-        plant.id,
+        plantId:
+          plant.id,
 
-      blob:
-        remote.blob,
+        blob:
+          remote.blob,
 
-      mimeType:
-        remote.mimeType,
+        mimeType:
+          remote.mimeType,
 
-      width:
-        remote.width,
+        width:
+          remote.width,
 
-      height:
-        remote.height,
+        height:
+          remote.height,
 
       /*
        * Не используем текущее время.
@@ -181,9 +171,10 @@ export async function downloadMissingPhotos(
        * sync выглядело бы как более новое
        * и снова отправлялось на сервер.
        */
-      createdAt:
-        remote.updatedAt,
-    });
+        createdAt:
+          remote.updatedAt,
+      });
+    }
   }
 }
 

@@ -116,6 +116,11 @@ function normalizeRemotePlant(
         ? value.photoId
         : null,
 
+    photoIds:
+      Array.isArray(value.photoIds)
+        ? value.photoIds.filter((item): item is string => typeof item === "string").slice(-3)
+        : typeof value.photoId === "string" ? [value.photoId] : [],
+
     wateringInterval:
       typeof value
         .wateringInterval ===

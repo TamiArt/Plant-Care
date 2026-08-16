@@ -16,11 +16,13 @@ import type {
 } from "../services/preparePhoto";
 
 import {
+  clearLocalGarden,
   getAllPlantRecords,
   getAllPlants,
   replaceAllPlantRecords,
   replacePlants as replacePlantsInDb,
   savePlant,
+  savePlantPhotoGallery,
   softDeletePlant,
   type SavePlantPhotoInput,
 } from "../repository/gardenRepository";
@@ -32,6 +34,7 @@ import {
 import {
   migrateSyncMetadata,
 } from "../repository/migrateSyncMetadata";
+import { getPlantPhotoIds, MAX_PLANT_PHOTOS } from "../model/photos";
 
 import {
   syncGarden,
@@ -101,6 +104,8 @@ export interface UpdatePlantPhotoOptions {
     | null;
 
   removePhoto?: boolean;
+
+  gallery?: Array<{ index: number; photo: PreparedPhoto | null }>;
 }
 
 function errorMessage(
@@ -354,6 +359,8 @@ export function useGarden() {
 
           photoId,
 
+          photoIds: photoId ? [photoId] : [],
+
           wateringInterval,
 
           location,
@@ -475,7 +482,46 @@ export function useGarden() {
         const {
           photo = null,
           removePhoto = false,
+          gallery,
         } = photoOptions;
+
+        if (gallery) {
+          const currentIds = getPlantPhotoIds(currentPlant);
+          const removedIds: string[] = [];
+          const newPhotos: SavePlantPhotoInput[] = [];
+          const updates = new Map(gallery.map(update => [update.index, update.photo]));
+          const nextIds: string[] = [];
+
+          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
+            const previousId = currentIds[index];
+            if (!updates.has(index)) {
+              if (previousId) nextIds.push(previousId);
+              continue;
+            }
+            if (previousId) removedIds.push(previousId);
+          }
+          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
+            const nextPhoto = updates.get(index);
+            if (nextPhoto) {
+              const id = createId();
+              nextIds.push(id);
+              newPhotos.push({ id, plantId: currentPlant.id, ...nextPhoto });
+            }
+          }
+          const normalizedIds = nextIds.filter(Boolean).slice(0, MAX_PLANT_PHOTOS);
+          const nextPlant = {
+            ...currentPlant,
+            ...changes,
+            photoIds: normalizedIds,
+            photoId: normalizedIds.at(-1) ?? null,
+            updatedAt: nowIso(),
+            deletedAt: null,
+          };
+          return execute(async () => {
+            await savePlantPhotoGallery(nextPlant, newPhotos, removedIds);
+            setPlants(current => current.map(item => item.id === id ? nextPlant : item));
+          });
+        }
 
         const nextPhotoId =
           photo
@@ -709,14 +755,21 @@ export function useGarden() {
       ) =>
         mutatePlant(
           id,
-          plant => ({
-            ...plant,
+          plant => {
+            const today = todayStr();
 
-            [field]: [
-              ...plant[field],
-              todayStr(),
-            ],
-          }),
+            if (plant[field].includes(today)) {
+              return plant;
+            }
+
+            return {
+              ...plant,
+              [field]: [
+                ...plant[field],
+                today,
+              ],
+            };
+          },
         ),
       [mutatePlant],
     );
@@ -942,6 +995,21 @@ export function useGarden() {
       [execute],
     );
 
+  const clearGarden =
+    useCallback(
+      async (): Promise<GardenOperationResult> =>
+        execute(
+          async () => {
+            await clearLocalGarden();
+            setPlants([]);
+            setSyncStatus("idle");
+            setSyncError(null);
+            setLastSyncedAt(null);
+          },
+        ),
+      [execute],
+    );
+
   /**
    * Полная двусторонняя
    * синхронизация растений.
@@ -1053,6 +1121,8 @@ export function useGarden() {
     lastSyncedAt,
 
     reload,
+
+    clearGarden,
 
     syncWithCloud,
 
