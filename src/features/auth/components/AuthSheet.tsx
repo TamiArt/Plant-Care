@@ -78,17 +78,28 @@ export function AuthSheet({
       setIsSubmitting(true);
       setError("");
 
-      const result = isRegister
-        ? await onRegister(
-            email,
-            password,
-          )
-        : await onLogin(
-            email,
-            password,
-          );
+      let result: AuthResult;
 
-      setIsSubmitting(false);
+      try {
+        result = isRegister
+          ? await onRegister(
+              email,
+              password,
+            )
+          : await onLogin(
+              email,
+              password,
+            );
+      } catch (reason) {
+        result = {
+          ok: false,
+          error: reason instanceof Error
+            ? reason.message
+            : "Сервер аккаунтов недоступен.",
+        };
+      } finally {
+        setIsSubmitting(false);
+      }
 
       if (result.ok) {
         onClose();
