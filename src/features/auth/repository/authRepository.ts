@@ -162,8 +162,22 @@ export async function getCurrentSession():
     user: AuthUser | null;
     session: AuthSession | null;
   }> {
+  /*
+   * Уникальный query-параметр обходит Cache Storage старого service worker,
+   * который ошибочно кешировал GET /api/auth/get-session. cache: no-store
+   * дополнительно запрещает обычное HTTP-кеширование сессии.
+   */
   const { data, error } =
-    await authClient.getSession();
+    await authClient.$fetch<{
+      user: AuthUser;
+      session: AuthSession;
+    }>("/get-session", {
+      cache: "no-store",
+      query: {
+        plantcareRequest:
+          Date.now().toString(),
+      },
+    });
 
   if (error) {
     throw new Error(
