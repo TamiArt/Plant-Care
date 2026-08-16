@@ -370,6 +370,28 @@ export async function replaceAllPlantRecords(
   await transaction.done;
 }
 
+/**
+ * Удаляет данные сада только с текущего устройства.
+ *
+ * Используется после выхода из аккаунта. Облачные записи при этом не
+ * изменяются: пользователь снова получит их после следующего входа и sync.
+ */
+export async function clearLocalGarden(): Promise<void> {
+  const database = await getGardenDb();
+  const transaction = database.transaction(
+    ["plants", "photos", "meta"],
+    "readwrite",
+  );
+
+  await Promise.all([
+    transaction.objectStore("plants").clear(),
+    transaction.objectStore("photos").clear(),
+    transaction.objectStore("meta").clear(),
+  ]);
+
+  await transaction.done;
+}
+
 export async function getMetaValue<T>(
   key: string,
 ): Promise<T | undefined> {

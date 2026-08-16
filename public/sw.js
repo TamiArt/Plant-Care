@@ -1,4 +1,4 @@
-const CACHE_VERSION = "plantcare-v1";
+const CACHE_VERSION = "plantcare-v2";
 
 const APP_SHELL = [
   "/",
@@ -49,6 +49,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(event.request.url);
+
+  // API-ответы зависят от cookies и текущего пользователя.
+  // Их нельзя класть в общий Cache Storage: иначе сохранённый ответ
+  // get-session=null продолжает возвращаться даже после успешного входа.
+  if (url.pathname.startsWith("/api/")) {
+    return;
+  }
 
 
   // Навигация страниц приложения
