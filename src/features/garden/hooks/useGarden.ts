@@ -709,14 +709,21 @@ export function useGarden() {
       ) =>
         mutatePlant(
           id,
-          plant => ({
-            ...plant,
+          plant => {
+            const today = todayStr();
 
-            [field]: [
-              ...plant[field],
-              todayStr(),
-            ],
-          }),
+            if (plant[field].includes(today)) {
+              return plant;
+            }
+
+            return {
+              ...plant,
+              [field]: [
+                ...plant[field],
+                today,
+              ],
+            };
+          },
         ),
       [mutatePlant],
     );
