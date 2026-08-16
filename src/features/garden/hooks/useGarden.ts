@@ -16,6 +16,7 @@ import type {
 } from "../services/preparePhoto";
 
 import {
+  clearLocalGarden,
   getAllPlantRecords,
   getAllPlants,
   replaceAllPlantRecords,
@@ -949,6 +950,21 @@ export function useGarden() {
       [execute],
     );
 
+  const clearGarden =
+    useCallback(
+      async (): Promise<GardenOperationResult> =>
+        execute(
+          async () => {
+            await clearLocalGarden();
+            setPlants([]);
+            setSyncStatus("idle");
+            setSyncError(null);
+            setLastSyncedAt(null);
+          },
+        ),
+      [execute],
+    );
+
   /**
    * Полная двусторонняя
    * синхронизация растений.
@@ -1060,6 +1076,8 @@ export function useGarden() {
     lastSyncedAt,
 
     reload,
+
+    clearGarden,
 
     syncWithCloud,
 
