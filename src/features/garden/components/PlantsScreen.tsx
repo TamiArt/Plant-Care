@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Database } from "lucide-react";
+import { BookOpen, LogIn } from "lucide-react";
 
 import type { PlantImageSource } from "../../../shared/components/PlantImage";
 import { getWateringStatus } from "../model/watering";
@@ -158,8 +158,10 @@ export function PlantsScreen({
                 items-center
                 justify-center
                 rounded-full
-                bg-secondary
-                text-muted-foreground
+                border
+                border-primary/20
+                bg-primary/10
+                text-primary
                 transition-colors
                 hover:bg-primary/10
                 hover:text-primary
@@ -169,10 +171,10 @@ export function PlantsScreen({
                 focus-visible:ring-offset-2
                 active:scale-95
               "
-              aria-label="Открыть данные и резервную копию"
-              title="Данные и резервная копия"
+              aria-label="Открыть вход и аккаунт"
+              title="Вход и аккаунт"
             >
-              <Database size={17} />
+              <LogIn size={18} strokeWidth={2.2} />
             </button>
           </div>
         </div>

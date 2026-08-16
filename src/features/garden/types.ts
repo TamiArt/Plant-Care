@@ -47,6 +47,9 @@ export interface UserPlant {
    */
   photoId: string | null;
 
+  /** Фото в порядке добавления; последнее используется как обложка. */
+  photoIds?: string[];
+
   wateringInterval: number;
   wateringHistory: string[];
 

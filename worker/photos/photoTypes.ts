@@ -52,5 +52,6 @@ export interface PlantOwnershipRow {
   id: string;
   user_id: string;
   photo_id: string | null;
+  photo_ids: string;
   deleted_at: string | null;
 }

@@ -229,12 +229,17 @@ export async function handlePutPhoto(
    * Нельзя загрузить Blob под
    * произвольным photoId.
    *
-   * photoId должен совпадать
-   * с текущим photo_id растения.
+   * photoId должен входить в галерею растения.
    */
   if (
-    plant.photo_id !==
-      photoId
+    !(() => {
+      try {
+        const ids: unknown = JSON.parse(plant.photo_ids);
+        return Array.isArray(ids) && ids.includes(photoId);
+      } catch {
+        return plant.photo_id === photoId;
+      }
+    })()
   ) {
     return json(
       {

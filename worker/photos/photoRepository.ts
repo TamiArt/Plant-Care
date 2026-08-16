@@ -32,6 +32,7 @@ export async function getOwnedPlant(
           id,
           user_id,
           photo_id,
+          photo_ids,
           deleted_at
 
         FROM plants

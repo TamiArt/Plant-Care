@@ -3,10 +3,12 @@ import { motion } from "motion/react";
 import { Bell, CheckSquare, Droplets, FlaskConical, Home, List, Pencil, Plus, Square, StickyNote, Trash2, Trees, Wind, X } from "lucide-react";
 import { PlantImage, type PlantImageSource } from "../../../shared/components/PlantImage";
 import { isMistedToday } from "../model/misting";
+import { getLatestPlantPhotoId } from "../model/photos";
 import { daysSince, getWateringStatus, type WateringStatus } from "../model/watering";
 import { insertNotePrefix } from "../noteUtils";
 import type { PlantDisplay, PlantLocation, UserPlant } from "../types";
 import { NoteContent } from "./NoteContent";
+import { PlantPhotoGallery } from "./PlantPhotoGallery";
 
 type PlantTab = "care" | "notes" | "reminders";
 type Difficulty = "easy" | "medium" | "hard";
@@ -76,13 +78,15 @@ export function UserPlantSheet({
         <div className="flex-1 overflow-y-auto">
           {/* Hero image */}
           <div className="relative">
-            <PlantImage catalogPlant={catalogPlant} photoId={up.photoId} emoji={display.emoji} className="w-full h-48" />
+            <PlantImage catalogPlant={catalogPlant} photoId={getLatestPlantPhotoId(up)} emoji={display.emoji} className="w-full h-48" />
             <button onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
             >
               <X size={18} />
             </button>
           </div>
+
+          <PlantPhotoGallery plant={up} />
 
           <div className="px-5 pt-3">
             {/* Header */}

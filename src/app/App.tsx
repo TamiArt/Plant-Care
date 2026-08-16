@@ -547,6 +547,7 @@ const {
               changes,
               photo,
               removePhoto,
+              gallery,
             }: EditPlantSaveData) => {
               const result =
                 await garden.updatePlant(
@@ -555,6 +556,7 @@ const {
                   {
                     photo,
                     removePhoto,
+                    gallery,
                   },
                 );
               return result.ok;
