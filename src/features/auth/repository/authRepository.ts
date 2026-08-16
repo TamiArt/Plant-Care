@@ -1,4 +1,5 @@
 import { authClient } from "../authClient";
+import { getAuthErrorMessage } from "../authErrors";
 import type {
   AuthResult,
   AuthSession,
@@ -23,6 +24,10 @@ function createAutomaticName(
 function getErrorMessage(
   error: unknown,
 ): string {
+  if (error instanceof TypeError) {
+    return "Сервер аккаунтов недоступен. Проверьте интернет и адрес приложения, затем повторите попытку.";
+  }
+
   if (
     typeof error === "object" &&
     error !== null &&
@@ -42,57 +47,88 @@ export async function signUpWithEmail(
   const normalizedEmail =
     normalizeEmail(email);
 
-  const { error } =
-    await authClient.signUp.email({
-      email: normalizedEmail,
-      password,
-      /*
-       * Better Auth требует name.
-       * Пользователю это поле не показываем.
-       */
-      name:
-        createAutomaticName(
-          normalizedEmail,
-        ),
-    });
+  try {
+    const { data, error } =
+      await authClient.signUp.email({
+        email: normalizedEmail,
+        password,
+        /*
+         * Better Auth требует name.
+         * Пользователю это поле не показываем.
+         */
+        name:
+          createAutomaticName(
+            normalizedEmail,
+          ),
+      });
 
-  if (error) {
+    if (error) {
+      return {
+        ok: false,
+        error: getAuthErrorMessage(
+          error,
+          "Не удалось создать аккаунт.",
+        ),
+      };
+    }
+
+    /*
+     * Раньше отсутствие error считалось успешной регистрацией даже при
+     * пустом ответе прокси. Из-за этого окно закрывалось, хотя аккаунт мог
+     * фактически не создаться.
+     */
+    if (!data?.user?.id) {
+      return {
+        ok: false,
+        error: "Сервер не подтвердил создание аккаунта. Повторите попытку; локальные растения не потеряны.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
     return {
       ok: false,
-      error:
-        error.message ??
-        "Не удалось создать аккаунт.",
+      error: getErrorMessage(error),
     };
   }
-
-  return {
-    ok: true,
-  };
 }
 
 export async function signInWithEmail(
   email: string,
   password: string,
 ): Promise<AuthResult> {
-  const { error } =
-    await authClient.signIn.email({
-      email: normalizeEmail(email),
-      password,
-      rememberMe: true,
-    });
+  try {
+    const { data, error } =
+      await authClient.signIn.email({
+        email: normalizeEmail(email),
+        password,
+        rememberMe: true,
+      });
 
-  if (error) {
+    if (error) {
+      return {
+        ok: false,
+        error: getAuthErrorMessage(
+          error,
+          "Неверная почта или пароль.",
+        ),
+      };
+    }
+
+    if (!data?.user?.id) {
+      return {
+        ok: false,
+        error: "Сервер не подтвердил вход. Проверьте адрес приложения и повторите попытку.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
     return {
       ok: false,
-      error:
-        error.message ??
-        "Неверная почта или пароль.",
+      error: getErrorMessage(error),
     };
   }
-
-  return {
-    ok: true,
-  };
 }
 
 export async function signOut():
@@ -129,7 +165,16 @@ export async function getCurrentSession():
   const { data, error } =
     await authClient.getSession();
 
-  if (error || !data) {
+  if (error) {
+    throw new Error(
+      getAuthErrorMessage(
+        error,
+        "Не удалось проверить сессию аккаунта.",
+      ),
+    );
+  }
+
+  if (!data) {
     return {
       user: null,
       session: null,
