@@ -7,6 +7,7 @@ import {
   getGardenDb,
 } from "./gardenDb";
 import { getPlantPhotoIds } from "../model/photos";
+import { mergeSyncedPlant } from "../model/careSyncMerge";
 
 export interface SavePlantPhotoInput {
   id: string;
@@ -361,10 +362,12 @@ export async function replacePlants(
 }
 
 /**
- * Полностью заменяет локальный набор
- * серверным результатом синхронизации.
+ * Применяет серверный результат синхронизации.
  *
- * Здесь tombstones сохраняются.
+ * В той же readwrite-транзакции сначала читается
+ * актуальная локальная запись. Поэтому полив,
+ * сохранённый во время сетевого запроса, объединяется
+ * с ответом сервера, а не стирается старым snapshot.
  */
 export async function replaceAllPlantRecords(
   plants: UserPlant[],
@@ -383,14 +386,50 @@ export async function replaceAllPlantRecords(
       "plants",
     );
 
-  await plantStore.clear();
+  const currentRecords =
+    (await plantStore.getAll()).map(
+      normalizePlantRecord,
+    );
 
-  for (const plant of plants) {
-    await plantStore.put(
-      normalizePlantRecord(
-        plant,
+  const currentById =
+    new Map(
+      currentRecords.map(
+        plant => [plant.id, plant],
       ),
     );
+
+  const resolved =
+    plants.map(plant => {
+      const local =
+        currentById.get(plant.id);
+
+      return normalizePlantRecord(
+        local
+          ? mergeSyncedPlant(
+              local,
+              plant,
+            )
+          : plant,
+      );
+    });
+
+  const remoteIds =
+    new Set(
+      plants.map(
+        plant => plant.id,
+      ),
+    );
+
+  for (const local of currentRecords) {
+    if (!remoteIds.has(local.id)) {
+      resolved.push(local);
+    }
+  }
+
+  await plantStore.clear();
+
+  for (const plant of resolved) {
+    await plantStore.put(plant);
   }
 
   await transaction.done;

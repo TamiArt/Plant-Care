@@ -12,38 +12,20 @@ import {
 } from "./photos/syncPhotos";
 
 /**
- * Полная синхронизация сада.
+ * Выполняет только сетевую часть синхронизации.
  *
- * Здесь только orchestration.
- *
- * Алгоритм растений, HTTP и фотографии
- * находятся в отдельных модулях.
+ * Применение ответа к IndexedDB вынесено отдельно,
+ * чтобы оно могло атомарно свериться с изменениями,
+ * появившимися пока запрос находился в полёте.
  */
 export async function syncGarden(
   localPlants: UserPlant[],
 ): Promise<CloudSyncResult> {
-  /*
-   * ШАГ 1.
-   *
-   * Сначала синхронизируем метаданные
-   * растений.
-   *
-   * Это критично для фотографий:
-   * сервер должен сначала узнать
-   * актуальный plant.photoId.
-   */
   const plantResult =
     await syncPlantsWithCloud(
       localPlants,
     );
 
-  /*
-   * plantResult.plants —
-   * авторитетный LWW-результат.
-   *
-   * Именно по нему определяем,
-   * какие photoId являются актуальными.
-   */
   await syncPhotos(
     plantResult.plants,
   );
