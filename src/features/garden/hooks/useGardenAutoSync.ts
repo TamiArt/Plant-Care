@@ -50,6 +50,9 @@ export function useGardenAutoSync({
   const runningRef =
     useRef(false);
 
+  const pendingRef =
+    useRef(false);
+
   const initialUserRef =
     useRef<string | null>(null);
 
@@ -103,29 +106,41 @@ export function useGardenAutoSync({
             "undefined" &&
           !navigator.onLine
         ) {
-          /*
-           * syncWithCloud сам выставляет
-           * статус offline.
-           */
           return syncWithCloud();
         }
 
+        /*
+         * Изменение во время активного sync нельзя
+         * просто отбросить. Запоминаем запрос и
+         * выполняем ещё один проход сразу после
+         * завершения текущего.
+         */
         if (runningRef.current) {
+          pendingRef.current = true;
+
           return {
-            ok: false,
-            error:
-              "Синхронизация уже выполняется.",
+            ok: true,
           };
         }
 
-        runningRef.current =
-          true;
+        runningRef.current = true;
+
+        let result: AutoSyncResult = {
+          ok: true,
+        };
 
         try {
-          return await syncWithCloud();
+          do {
+            pendingRef.current = false;
+            result = await syncWithCloud();
+          } while (
+            pendingRef.current &&
+            canSync
+          );
+
+          return result;
         } finally {
-          runningRef.current =
-            false;
+          runningRef.current = false;
         }
       },
       [
@@ -143,6 +158,7 @@ export function useGardenAutoSync({
     if (!userId) {
       initialUserRef.current =
         null;
+      pendingRef.current = false;
     }
   }, [userId]);
 
@@ -253,7 +269,7 @@ export function useGardenAutoSync({
       () => {
         if (
           document.visibilityState ===
-          "visible"
+            "visible"
         ) {
           void runSync();
         }
@@ -279,9 +295,6 @@ export function useGardenAutoSync({
    * Страховочная синхронизация
    * раз в 5 минут, пока приложение
    * открыто.
-   *
-   * Это не основной механизм,
-   * а резервный.
    */
   useEffect(() => {
     if (!canSync) {
@@ -293,7 +306,7 @@ export function useGardenAutoSync({
         () => {
           if (
             document.visibilityState ===
-            "visible"
+              "visible"
           ) {
             void runSync();
           }
