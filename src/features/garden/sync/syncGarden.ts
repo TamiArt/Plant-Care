@@ -3,6 +3,10 @@ import type {
 } from "../types";
 
 import {
+  getAllPlantRecords,
+} from "../repository/gardenRepository";
+
+import {
   syncPlantsWithCloud,
   type CloudSyncResult,
 } from "./syncRepository";
@@ -11,42 +15,59 @@ import {
   syncPhotos,
 } from "./photos/syncPhotos";
 
+import {
+  reconcilePlantSync,
+} from "./reconcilePlants";
+
 /**
  * Полная синхронизация сада.
  *
- * Здесь только orchestration.
- *
- * Алгоритм растений, HTTP и фотографии
- * находятся в отдельных модулях.
+ * Здесь находится orchestration:
+ * metadata -> photos -> финальная сверка
+ * с актуальным локальным IndexedDB.
  */
 export async function syncGarden(
-  localPlants: UserPlant[],
+  sentPlants: UserPlant[],
 ): Promise<CloudSyncResult> {
   /*
    * ШАГ 1.
    *
-   * Сначала синхронизируем метаданные
-   * растений.
-   *
-   * Это критично для фотографий:
-   * сервер должен сначала узнать
-   * актуальный plant.photoId.
+   * Отправляем snapshot, который был актуален
+   * на момент старта синхронизации.
    */
   const plantResult =
     await syncPlantsWithCloud(
-      localPlants,
+      sentPlants,
     );
 
   /*
-   * plantResult.plants —
-   * авторитетный LWW-результат.
+   * ШАГ 2.
    *
-   * Именно по нему определяем,
-   * какие photoId являются актуальными.
+   * Синхронизируем фотографии по серверному
+   * результату. Пока это выполняется, пользователь
+   * всё ещё может изменить растение локально.
    */
   await syncPhotos(
     plantResult.plants,
   );
 
-  return plantResult;
+  /*
+   * ШАГ 3.
+   *
+   * Читаем IndexedDB повторно ПОСЛЕ всех сетевых
+   * операций. Если за время запроса появился полив,
+   * заметка или другое изменение, устаревший ответ
+   * сервера не имеет права его стереть.
+   */
+  const latestLocalPlants =
+    await getAllPlantRecords();
+
+  return {
+    ...plantResult,
+    plants: reconcilePlantSync(
+      sentPlants,
+      latestLocalPlants,
+      plantResult.plants,
+    ),
+  };
 }
