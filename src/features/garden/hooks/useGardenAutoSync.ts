@@ -14,6 +14,12 @@ import {
   setMetaValue,
 } from "../repository/gardenRepository";
 
+import {
+  getDailySyncDelay,
+  isDailySyncDue,
+  isValidSyncTimestamp,
+} from "../model/syncSchedule";
+
 export interface AutoSyncResult {
   ok: boolean;
   error?: string;
@@ -35,42 +41,10 @@ export interface UseGardenAutoSyncOptions {
     () => Promise<AutoSyncResult>;
 }
 
-const DAILY_SYNC_INTERVAL_MS =
-  24 * 60 * 60 * 1000;
-
 function lastSyncMetaKey(
   userId: string,
 ): string {
   return `garden:lastSyncedAt:${userId}`;
-}
-
-function isValidTimestamp(
-  value: unknown,
-): value is string {
-  return (
-    typeof value === "string" &&
-    Number.isFinite(Date.parse(value))
-  );
-}
-
-function isDailySyncDue(
-  lastSyncedAt: string | null,
-): boolean {
-  if (!lastSyncedAt) {
-    return true;
-  }
-
-  const timestamp =
-    Date.parse(lastSyncedAt);
-
-  if (!Number.isFinite(timestamp)) {
-    return true;
-  }
-
-  return (
-    Date.now() - timestamp >=
-    DAILY_SYNC_INTERVAL_MS
-  );
 }
 
 /**
@@ -139,7 +113,7 @@ export function useGardenAutoSync({
 
             if (
               result.ok &&
-              isValidTimestamp(
+              isValidSyncTimestamp(
                 result.syncedAt,
               )
             ) {
@@ -216,7 +190,7 @@ export function useGardenAutoSync({
       }
 
       const lastSyncedAt =
-        isValidTimestamp(stored)
+        isValidSyncTimestamp(stored)
           ? stored
           : null;
 
@@ -253,28 +227,21 @@ export function useGardenAutoSync({
       return;
     }
 
-    const lastTimestamp =
-      Date.parse(
+    const delay =
+      getDailySyncDelay(
         persistedLastSyncedAt,
       );
 
-    if (!Number.isFinite(lastTimestamp)) {
+    if (delay === null) {
       return;
     }
-
-    const remaining =
-      Math.max(
-        0,
-        DAILY_SYNC_INTERVAL_MS -
-          (Date.now() - lastTimestamp),
-      );
 
     const timeout =
       window.setTimeout(
         () => {
           void runSync();
         },
-        remaining,
+        delay,
       );
 
     return () => {
