@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  reconcilePlantSync,
-} from "../src/features/garden/sync/reconcilePlants.ts";
+  mergeSyncedPlant,
+} from "../src/features/garden/model/careSyncMerge.ts";
 
 import type {
   UserPlant,
@@ -37,15 +37,9 @@ function plant(
 }
 
 test(
-  "does not overwrite watering added while sync was in flight",
+  "keeps watering added locally while sync response is in flight",
   () => {
-    const sent = plant({
-      wateringHistory: [],
-      updatedAt:
-        "2026-08-17T10:00:00.000Z",
-    });
-
-    const latest = plant({
+    const local = plant({
       wateringHistory: [
         "2026-08-17",
       ],
@@ -53,42 +47,29 @@ test(
         "2026-08-17T10:00:02.000Z",
     });
 
-    const remote = plant({
+    const staleRemote = plant({
       wateringHistory: [],
       updatedAt:
         "2026-08-17T10:00:01.000Z",
     });
 
-    const [result] =
-      reconcilePlantSync(
-        [sent],
-        [latest],
-        [remote],
+    const result =
+      mergeSyncedPlant(
+        local,
+        staleRemote,
       );
 
     assert.deepEqual(
       result.wateringHistory,
       ["2026-08-17"],
     );
-
-    assert.ok(
-      result.updatedAt >=
-        latest.updatedAt,
-    );
   },
 );
 
 test(
-  "keeps a local in-flight change even when remote clock is ahead",
+  "keeps watering even when remote timestamp is ahead",
   () => {
-    const sent = plant({
-      nickname: "Старое имя",
-      updatedAt:
-        "2026-08-17T10:00:00.000Z",
-    });
-
-    const latest = plant({
-      nickname: "Локальное имя",
+    const local = plant({
       wateringHistory: [
         "2026-08-17",
       ],
@@ -97,22 +78,16 @@ test(
     });
 
     const remote = plant({
-      nickname: "Старое имя",
+      wateringHistory: [],
       updatedAt:
         "2026-08-18T10:00:00.000Z",
     });
 
-    const [result] =
-      reconcilePlantSync(
-        [sent],
-        [latest],
-        [remote],
+    const result =
+      mergeSyncedPlant(
+        local,
+        remote,
       );
-
-    assert.equal(
-      result.nickname,
-      "Локальное имя",
-    );
 
     assert.deepEqual(
       result.wateringHistory,
@@ -127,15 +102,11 @@ test(
 );
 
 test(
-  "accepts a newer remote plant when local record did not change during sync",
+  "accepts newer remote metadata",
   () => {
-    const sent = plant({
-      nickname: "До sync",
+    const local = plant({
+      nickname: "Локальное имя",
     });
-
-    const latest = {
-      ...sent,
-    };
 
     const remote = plant({
       nickname: "С другого устройства",
@@ -143,11 +114,10 @@ test(
         "2026-08-17T11:00:00.000Z",
     });
 
-    const [result] =
-      reconcilePlantSync(
-        [sent],
-        [latest],
-        [remote],
+    const result =
+      mergeSyncedPlant(
+        local,
+        remote,
       );
 
     assert.equal(
@@ -160,15 +130,12 @@ test(
 test(
   "merges care events from both devices without duplicates",
   () => {
-    const sent = plant({
+    const local = plant({
       wateringHistory: [
         "2026-08-01",
+        "2026-08-17",
       ],
     });
-
-    const latest = {
-      ...sent,
-    };
 
     const remote = plant({
       wateringHistory: [
@@ -182,11 +149,10 @@ test(
         "2026-08-17T11:00:00.000Z",
     });
 
-    const [result] =
-      reconcilePlantSync(
-        [sent],
-        [latest],
-        [remote],
+    const result =
+      mergeSyncedPlant(
+        local,
+        remote,
       );
 
     assert.deepEqual(
@@ -194,6 +160,7 @@ test(
       [
         "2026-08-01",
         "2026-08-10",
+        "2026-08-17",
       ],
     );
 
