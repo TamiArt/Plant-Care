@@ -7,6 +7,7 @@ import {
   getGardenDb,
 } from "./gardenDb";
 import { getPlantPhotoIds } from "../model/photos";
+import { mergeSyncedPlant } from "../model/careSyncMerge";
 
 export interface SavePlantPhotoInput {
   id: string;
@@ -101,101 +102,6 @@ function normalizePlantRecord(
         ? withoutLegacyPhoto
             .deletedAt
         : null,
-  };
-}
-
-function mergeHistory(
-  first: string[],
-  second: string[],
-): string[] {
-  return [
-    ...new Set([
-      ...first,
-      ...second,
-    ]),
-  ].sort();
-}
-
-function sameHistory(
-  first: string[],
-  second: string[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (value, index) =>
-        value === second[index],
-    )
-  );
-}
-
-function mergedTimestamp(
-  first: string,
-  second: string,
-): string {
-  const latest = Math.max(
-    Date.now(),
-    Date.parse(first),
-    Date.parse(second),
-  );
-
-  return new Date(
-    latest + 1,
-  ).toISOString();
-}
-
-function mergeSyncedPlant(
-  local: UserPlant,
-  remote: UserPlant,
-): UserPlant {
-  const base =
-    local.updatedAt > remote.updatedAt
-      ? local
-      : remote;
-
-  const wateringHistory =
-    mergeHistory(
-      local.wateringHistory,
-      remote.wateringHistory,
-    );
-
-  const mistingHistory =
-    mergeHistory(
-      local.mistingHistory,
-      remote.mistingHistory,
-    );
-
-  const fertilizingHistory =
-    mergeHistory(
-      local.fertilizingHistory,
-      remote.fertilizingHistory,
-    );
-
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
-
-  return {
-    ...base,
-    wateringHistory,
-    mistingHistory,
-    fertilizingHistory,
-    updatedAt: historyChanged
-      ? mergedTimestamp(
-          local.updatedAt,
-          remote.updatedAt,
-        )
-      : base.updatedAt,
   };
 }
 
@@ -458,11 +364,10 @@ export async function replacePlants(
 /**
  * Применяет серверный результат синхронизации.
  *
- * Важно: сначала в той же readwrite-транзакции
- * читается актуальная локальная запись. Если полив
- * был сохранён, пока сетевой запрос находился в
- * полёте, его история объединяется с ответом сервера,
- * а не стирается устаревшим snapshot.
+ * В той же readwrite-транзакции сначала читается
+ * актуальная локальная запись. Поэтому полив,
+ * сохранённый во время сетевого запроса, объединяется
+ * с ответом сервера, а не стирается старым snapshot.
  */
 export async function replaceAllPlantRecords(
   plants: UserPlant[],
