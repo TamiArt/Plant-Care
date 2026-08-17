@@ -5,6 +5,10 @@ import {
   useState,
 } from "react";
 
+import type {
+  UserPlant,
+} from "../types";
+
 import {
   getMetaValue,
   setMetaValue,
@@ -20,6 +24,13 @@ export interface UseGardenAutoSyncOptions {
   userId: string | null;
   authLoading: boolean;
   gardenLoading: boolean;
+
+  /**
+   * Сохраняем в контракте хука для совместимости
+   * с App. Изменения plants больше не запускают sync.
+   */
+  plants: UserPlant[];
+
   syncWithCloud:
     () => Promise<AutoSyncResult>;
 }
@@ -132,14 +143,22 @@ export function useGardenAutoSync({
                 result.syncedAt,
               )
             ) {
-              await setMetaValue(
-                lastSyncMetaKey(userId),
-                result.syncedAt,
-              );
-
               setPersistedLastSyncedAt(
                 result.syncedAt,
               );
+
+              try {
+                await setMetaValue(
+                  lastSyncMetaKey(userId),
+                  result.syncedAt,
+                );
+              } catch {
+                /*
+                 * Сам sync уже успешен. Ошибка записи
+                 * служебного timestamp не должна его
+                 * превращать в ошибку пользователя.
+                 */
+              }
             }
           } while (
             pendingRef.current &&
@@ -181,10 +200,16 @@ export function useGardenAutoSync({
     let active = true;
 
     void (async () => {
-      const stored =
-        await getMetaValue<unknown>(
-          lastSyncMetaKey(userId),
-        );
+      let stored: unknown;
+
+      try {
+        stored =
+          await getMetaValue<unknown>(
+            lastSyncMetaKey(userId),
+          );
+      } catch {
+        stored = null;
+      }
 
       if (!active) {
         return;
@@ -217,8 +242,8 @@ export function useGardenAutoSync({
 
   /**
    * Если приложение остаётся открытым больше суток,
-   * выполняем следующий автоматический sync ровно
-   * после истечения 24 часов с успешного предыдущего.
+   * выполняем следующий автоматический sync после
+   * истечения 24 часов с успешного предыдущего.
    */
   useEffect(() => {
     if (
