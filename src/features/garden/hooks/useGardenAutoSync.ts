@@ -1,13 +1,14 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
+  useState,
 } from "react";
 
-import type {
-  UserPlant,
-} from "../types";
+import {
+  getMetaValue,
+  setMetaValue,
+} from "../repository/gardenRepository";
 
 export interface AutoSyncResult {
   ok: boolean;
@@ -17,34 +18,62 @@ export interface AutoSyncResult {
 
 export interface UseGardenAutoSyncOptions {
   userId: string | null;
-
   authLoading: boolean;
-
   gardenLoading: boolean;
-
-  plants: UserPlant[];
-
   syncWithCloud:
     () => Promise<AutoSyncResult>;
 }
 
-const CHANGE_SYNC_DELAY_MS = 1500;
+const DAILY_SYNC_INTERVAL_MS =
+  24 * 60 * 60 * 1000;
 
-const PERIODIC_SYNC_INTERVAL_MS =
-  5 * 60 * 1000;
+function lastSyncMetaKey(
+  userId: string,
+): string {
+  return `garden:lastSyncedAt:${userId}`;
+}
+
+function isValidTimestamp(
+  value: unknown,
+): value is string {
+  return (
+    typeof value === "string" &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function isDailySyncDue(
+  lastSyncedAt: string | null,
+): boolean {
+  if (!lastSyncedAt) {
+    return true;
+  }
+
+  const timestamp =
+    Date.parse(lastSyncedAt);
+
+  if (!Number.isFinite(timestamp)) {
+    return true;
+  }
+
+  return (
+    Date.now() - timestamp >=
+    DAILY_SYNC_INTERVAL_MS
+  );
+}
 
 /**
- * Отвечает только за то,
- * КОГДА запускать синхронизацию.
+ * Планировщик облачной синхронизации.
  *
- * Сам алгоритм sync/LWW остаётся
- * внутри garden sync layer.
+ * Автоматически синхронизирует сад не чаще
+ * одного раза в 24 часа. Ручной sync доступен
+ * всегда через syncNow(). Локальные изменения
+ * сами по себе сетевой запрос не запускают.
  */
 export function useGardenAutoSync({
   userId,
   authLoading,
   gardenLoading,
-  plants,
   syncWithCloud,
 }: UseGardenAutoSyncOptions) {
   const runningRef =
@@ -53,35 +82,12 @@ export function useGardenAutoSync({
   const pendingRef =
     useRef(false);
 
-  const initialUserRef =
+  const loadedUserRef =
     useRef<string | null>(null);
 
-  /**
-   * Меняется при:
-   *
-   * - добавлении растения;
-   * - редактировании;
-   * - поливе;
-   * - заметках;
-   * - напоминаниях;
-   * - удалении.
-   *
-   * При soft-delete растение исчезает
-   * из active plants, поэтому ключ
-   * тоже изменяется.
-   */
-  const localChangeKey =
-    useMemo(
-      () =>
-        plants
-          .map(
-            plant =>
-              `${plant.id}:${plant.updatedAt}`,
-          )
-          .sort()
-          .join("|"),
-      [plants],
-    );
+  const [persistedLastSyncedAt,
+    setPersistedLastSyncedAt,
+  ] = useState<string | null>(null);
 
   const canSync =
     Boolean(
@@ -93,7 +99,7 @@ export function useGardenAutoSync({
   const runSync =
     useCallback(
       async (): Promise<AutoSyncResult> => {
-        if (!canSync) {
+        if (!canSync || !userId) {
           return {
             ok: false,
             error:
@@ -101,20 +107,6 @@ export function useGardenAutoSync({
           };
         }
 
-        if (
-          typeof navigator !==
-            "undefined" &&
-          !navigator.onLine
-        ) {
-          return syncWithCloud();
-        }
-
-        /*
-         * Изменение во время активного sync нельзя
-         * просто отбросить. Запоминаем запрос и
-         * выполняем ещё один проход сразу после
-         * завершения текущего.
-         */
         if (runningRef.current) {
           pendingRef.current = true;
 
@@ -133,6 +125,22 @@ export function useGardenAutoSync({
           do {
             pendingRef.current = false;
             result = await syncWithCloud();
+
+            if (
+              result.ok &&
+              isValidTimestamp(
+                result.syncedAt,
+              )
+            ) {
+              await setMetaValue(
+                lastSyncMetaKey(userId),
+                result.syncedAt,
+              );
+
+              setPersistedLastSyncedAt(
+                result.syncedAt,
+              );
+            }
           } while (
             pendingRef.current &&
             canSync
@@ -146,181 +154,110 @@ export function useGardenAutoSync({
       [
         canSync,
         syncWithCloud,
+        userId,
       ],
     );
 
   /**
-   * При logout разрешаем сделать
-   * initial sync снова после
-   * следующего входа.
+   * При смене аккаунта заново читаем timestamp
+   * последней успешной синхронизации из IndexedDB.
    */
   useEffect(() => {
     if (!userId) {
-      initialUserRef.current =
-        null;
+      loadedUserRef.current = null;
       pendingRef.current = false;
+      setPersistedLastSyncedAt(null);
+      return;
     }
-  }, [userId]);
 
-  /**
-   * Первый sync после входа.
-   */
-  useEffect(() => {
     if (
       !canSync ||
-      !userId
+      loadedUserRef.current === userId
     ) {
       return;
     }
 
-    if (
-      initialUserRef.current ===
-      userId
-    ) {
-      return;
-    }
+    loadedUserRef.current = userId;
+    let active = true;
 
-    initialUserRef.current =
-      userId;
+    void (async () => {
+      const stored =
+        await getMetaValue<unknown>(
+          lastSyncMetaKey(userId),
+        );
 
-    void runSync();
+      if (!active) {
+        return;
+      }
+
+      const lastSyncedAt =
+        isValidTimestamp(stored)
+          ? stored
+          : null;
+
+      setPersistedLastSyncedAt(
+        lastSyncedAt,
+      );
+
+      if (
+        isDailySyncDue(lastSyncedAt)
+      ) {
+        void runSync();
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [
     canSync,
-    userId,
     runSync,
+    userId,
   ]);
 
   /**
-   * После локального изменения
-   * ждём 1.5 секунды.
-   *
-   * Это объединяет серию быстрых
-   * действий пользователя в один sync.
+   * Если приложение остаётся открытым больше суток,
+   * выполняем следующий автоматический sync ровно
+   * после истечения 24 часов с успешного предыдущего.
    */
   useEffect(() => {
     if (
       !canSync ||
-      !userId ||
-      initialUserRef.current !==
-        userId
+      !persistedLastSyncedAt
     ) {
       return;
     }
+
+    const lastTimestamp =
+      Date.parse(
+        persistedLastSyncedAt,
+      );
+
+    if (!Number.isFinite(lastTimestamp)) {
+      return;
+    }
+
+    const remaining =
+      Math.max(
+        0,
+        DAILY_SYNC_INTERVAL_MS -
+          (Date.now() - lastTimestamp),
+      );
 
     const timeout =
       window.setTimeout(
         () => {
           void runSync();
         },
-        CHANGE_SYNC_DELAY_MS,
+        remaining,
       );
 
     return () => {
-      window.clearTimeout(
-        timeout,
-      );
+      window.clearTimeout(timeout);
     };
   }, [
     canSync,
-    userId,
-    localChangeKey,
-    runSync,
-  ]);
-
-  /**
-   * Интернет снова появился.
-   */
-  useEffect(() => {
-    if (!canSync) {
-      return;
-    }
-
-    const handleOnline =
-      () => {
-        void runSync();
-      };
-
-    window.addEventListener(
-      "online",
-      handleOnline,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "online",
-        handleOnline,
-      );
-    };
-  }, [
-    canSync,
-    runSync,
-  ]);
-
-  /**
-   * Пользователь вернулся
-   * в приложение.
-   */
-  useEffect(() => {
-    if (!canSync) {
-      return;
-    }
-
-    const handleVisibilityChange =
-      () => {
-        if (
-          document.visibilityState ===
-            "visible"
-        ) {
-          void runSync();
-        }
-      };
-
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange,
-    );
-
-    return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
-    };
-  }, [
-    canSync,
-    runSync,
-  ]);
-
-  /**
-   * Страховочная синхронизация
-   * раз в 5 минут, пока приложение
-   * открыто.
-   */
-  useEffect(() => {
-    if (!canSync) {
-      return;
-    }
-
-    const interval =
-      window.setInterval(
-        () => {
-          if (
-            document.visibilityState ===
-              "visible"
-          ) {
-            void runSync();
-          }
-        },
-        PERIODIC_SYNC_INTERVAL_MS,
-      );
-
-    return () => {
-      window.clearInterval(
-        interval,
-      );
-    };
-  }, [
-    canSync,
+    persistedLastSyncedAt,
     runSync,
   ]);
 
