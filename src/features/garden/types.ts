@@ -19,6 +19,11 @@ export interface PlantReminder {
   done: boolean;
 }
 
+export interface SupplementalLightSchedule {
+  start: string;
+  end: string;
+}
+
 export interface PlantDisplay {
   name: string;
   latinName: string;
@@ -53,10 +58,21 @@ export interface UserPlant {
   wateringInterval: number;
   wateringHistory: string[];
 
+  /**
+   * undefined = старое поведение (опрыскивание включено).
+   * false = пользователь явно отключил опрыскивание.
+   */
+  mistingEnabled?: boolean;
   mistingHistory: string[];
 
   fertilizingInterval: number;
   fertilizingHistory: string[];
+
+  /**
+   * Необязательный ежедневный диапазон дополнительного освещения.
+   * Время хранится в локальном формате HH:mm.
+   */
+  supplementalLight?: SupplementalLightSchedule | null;
 
   addedAt: string;
 
