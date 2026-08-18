@@ -37,7 +37,8 @@ export function normalizeSupplementalLight(
 
   if (
     !isValidTime(schedule.start) ||
-    !isValidTime(schedule.end)
+    !isValidTime(schedule.end) ||
+    schedule.start === schedule.end
   ) {
     return null;
   }
