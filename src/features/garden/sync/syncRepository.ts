@@ -1,3 +1,6 @@
+import {
+  normalizeSupplementalLight,
+} from "../model/carePreferences";
 import type {
   UserPlant,
 } from "../types";
@@ -118,8 +121,16 @@ function normalizeRemotePlant(
 
     photoIds:
       Array.isArray(value.photoIds)
-        ? value.photoIds.filter((item): item is string => typeof item === "string").slice(-3)
-        : typeof value.photoId === "string" ? [value.photoId] : [],
+        ? value.photoIds
+            .filter(
+              (item): item is string =>
+                typeof item === "string",
+            )
+            .slice(-3)
+        : typeof value.photoId ===
+            "string"
+          ? [value.photoId]
+          : [],
 
     wateringInterval:
       typeof value
@@ -140,6 +151,9 @@ function normalizeRemotePlant(
               "string",
           )
         : [],
+
+    mistingEnabled:
+      value.mistingEnabled !== false,
 
     mistingHistory:
       Array.isArray(
@@ -173,6 +187,11 @@ function normalizeRemotePlant(
               "string",
           )
         : [],
+
+    supplementalLight:
+      normalizeSupplementalLight(
+        value.supplementalLight,
+      ),
 
     addedAt:
       typeof value.addedAt ===
