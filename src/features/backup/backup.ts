@@ -130,8 +130,13 @@ function migratePlant(
       stringArray(
         value.wateringHistory,
       ),
-    mistingEnabled:
-      value.mistingEnabled !== false,
+    ...(typeof value.mistingEnabled ===
+      "boolean"
+      ? {
+          mistingEnabled:
+            value.mistingEnabled,
+        }
+      : {}),
     mistingHistory:
       stringArray(
         value.mistingHistory,
@@ -145,10 +150,15 @@ function migratePlant(
       stringArray(
         value.fertilizingHistory,
       ),
-    supplementalLight:
-      normalizeSupplementalLight(
-        value.supplementalLight,
-      ),
+    ...(value.supplementalLight !==
+    undefined
+      ? {
+          supplementalLight:
+            normalizeSupplementalLight(
+              value.supplementalLight,
+            ),
+        }
+      : {}),
     addedAt:
       typeof value.addedAt === "string"
         ? value.addedAt
