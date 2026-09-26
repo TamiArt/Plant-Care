@@ -7,6 +7,8 @@ export interface PlantPhotoGalleryProps {
   emoji: string;
   className?: string;
   onEmptyClick?: () => void;
+  onPhotoClick?: () => void;
+  enableViewer?: boolean;
 }
 
 export function PlantPhotoGallery({
@@ -15,12 +17,14 @@ export function PlantPhotoGallery({
   emoji,
   className = "",
   onEmptyClick,
+  onPhotoClick,
+  enableViewer = true,
 }: PlantPhotoGalleryProps) {
   const safePhotoIds = Array.isArray(photoIds) ? photoIds.filter(Boolean) : [];
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (viewerIndex === null) return;
+    if (!enableViewer || viewerIndex === null) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setViewerIndex(null);
@@ -45,18 +49,29 @@ export function PlantPhotoGallery({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewerIndex, safePhotoIds.length]);
+  }, [enableViewer, viewerIndex, safePhotoIds.length]);
 
   useEffect(() => {
     if (
       viewerIndex !== null &&
-      (viewerIndex < 0 || viewerIndex >= safePhotoIds.length)
+      (!enableViewer ||
+        viewerIndex < 0 ||
+        viewerIndex >= safePhotoIds.length)
     ) {
       setViewerIndex(null);
     }
-  }, [viewerIndex, safePhotoIds.length]);
+  }, [enableViewer, viewerIndex, safePhotoIds.length]);
 
   const count = safePhotoIds.length;
+
+  const handlePhotoClick = (index: number) => {
+    if (enableViewer) {
+      setViewerIndex(index);
+      return;
+    }
+
+    onPhotoClick?.();
+  };
 
   return (
     <>
@@ -91,8 +106,12 @@ export function PlantPhotoGallery({
               <button
                 key={photoId}
                 type="button"
-                onClick={() => setViewerIndex(index)}
-                aria-label={`Открыть фото ${index + 1} из ${count}`}
+                onClick={() => handlePhotoClick(index)}
+                aria-label={
+                  enableViewer
+                    ? `Открыть фото ${index + 1} из ${count}`
+                    : "Открыть карточку растения"
+                }
                 className={
                   count === 3 && index === 0
                     ? "relative min-h-0 min-w-0 row-span-2 overflow-hidden"
@@ -115,7 +134,7 @@ export function PlantPhotoGallery({
         )}
       </div>
 
-      {viewerIndex !== null && safePhotoIds[viewerIndex] && (
+      {enableViewer && viewerIndex !== null && safePhotoIds[viewerIndex] && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           role="dialog"
