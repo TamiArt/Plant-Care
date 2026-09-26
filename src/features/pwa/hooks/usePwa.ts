@@ -25,20 +25,20 @@ export function usePwa() {
 
   useEffect(() => {
     const onInstallPrompt = (event: Event) => {
-      event.preventDefault();
-
       const isHidden =
         localStorage.getItem(INSTALL_HIDDEN_KEY) === "true";
 
       /*
-       * Пользователь уже закрыл предложение установки.
-       * Событие перехватываем, но баннер больше не показываем.
+       * Не вызываем preventDefault(), если предложение установки
+       * уже скрыто. Иначе браузер предупреждает, что событие
+       * было перехвачено, но prompt() так и не был вызван.
        */
       if (isHidden) {
         setInstallPrompt(null);
         return;
       }
 
+      event.preventDefault();
       setInstallPrompt(event as InstallPromptEvent);
     };
 
