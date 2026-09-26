@@ -16,6 +16,7 @@ export function PlantPhotoGallery({
   className = "",
   onEmptyClick,
 }: PlantPhotoGalleryProps) {
+  const safePhotoIds = Array.isArray(photoIds) ? photoIds.filter(Boolean) : [];
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -23,13 +24,13 @@ export function PlantPhotoGallery({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setViewerIndex(null);
-      if (photoIds.length < 2) return;
+      if (safePhotoIds.length < 2) return;
 
       if (event.key === "ArrowLeft") {
         setViewerIndex(current =>
           current === null
             ? null
-            : (current - 1 + photoIds.length) % photoIds.length,
+            : (current - 1 + safePhotoIds.length) % safePhotoIds.length,
         );
       }
 
@@ -37,16 +38,25 @@ export function PlantPhotoGallery({
         setViewerIndex(current =>
           current === null
             ? null
-            : (current + 1) % photoIds.length,
+            : (current + 1) % safePhotoIds.length,
         );
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewerIndex, photoIds.length]);
+  }, [viewerIndex, safePhotoIds.length]);
 
-  const count = photoIds.length;
+  useEffect(() => {
+    if (
+      viewerIndex !== null &&
+      (viewerIndex < 0 || viewerIndex >= safePhotoIds.length)
+    ) {
+      setViewerIndex(null);
+    }
+  }, [viewerIndex, safePhotoIds.length]);
+
+  const count = safePhotoIds.length;
 
   return (
     <>
@@ -77,7 +87,7 @@ export function PlantPhotoGallery({
                   : "grid h-full w-full grid-cols-2 grid-rows-2 gap-px"
             }
           >
-            {photoIds.map((photoId, index) => (
+            {safePhotoIds.map((photoId, index) => (
               <button
                 key={photoId}
                 type="button"
@@ -105,7 +115,7 @@ export function PlantPhotoGallery({
         )}
       </div>
 
-      {viewerIndex !== null && photoIds[viewerIndex] && (
+      {viewerIndex !== null && safePhotoIds[viewerIndex] && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           role="dialog"
@@ -154,7 +164,7 @@ export function PlantPhotoGallery({
             onClick={event => event.stopPropagation()}
           >
             <PlantImage
-              photoId={photoIds[viewerIndex]}
+              photoId={safePhotoIds[viewerIndex]}
               className="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain"
             />
             {count > 1 && (
