@@ -347,6 +347,33 @@ export function EditPlantModal({
             onChange={handlePhoto}
             className="hidden"
           />
+          <button
+            type="button"
+            disabled={isPreparing || isSaving}
+            onClick={() => {
+              const currentIds = initialPhotoIds.filter(Boolean);
+              const targetIndex =
+                currentIds.length < MAX_PLANT_PHOTOS
+                  ? currentIds.length
+                  : 0;
+
+              selectedPhotoIndex.current = targetIndex;
+              fileRef.current?.click();
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            <ImagePlus size={15} />
+            {initialPhotoIds.length >= MAX_PLANT_PHOTOS
+              ? "Добавить фото — заменить самое старое"
+              : "Добавить фото"}
+          </button>
+
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            Нажмите на конкретное фото, чтобы заменить именно его. Если
+            все три места заняты, кнопка «Добавить фото» автоматически
+            заменит самое старое фото.
+          </p>
+
           {isPreparing && (
             <p className="mt-2 text-xs text-muted-foreground">
               Подготовка фотографии…
