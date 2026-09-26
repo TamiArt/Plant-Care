@@ -60,6 +60,8 @@ export function PlantCard({
           catalogPlant={catalogPlant}
           emoji={display.emoji}
           onEmptyClick={onOpen}
+          onPhotoClick={onOpen}
+          enableViewer={false}
         />
 
         <div className="flex min-w-0 flex-1 flex-col justify-between p-3">
