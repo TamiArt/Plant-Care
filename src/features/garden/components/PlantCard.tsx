@@ -4,17 +4,13 @@ import {
   Droplets,
   Wind,
 } from "lucide-react";
-import {
-  PlantImage,
-  type PlantImageSource,
-} from "../../../shared/components/PlantImage";
-import {
-  isMistingEnabled,
-} from "../model/carePreferences";
+import type { PlantImageSource } from "../../../shared/components/PlantImage";
+import { isMistingEnabled } from "../model/carePreferences";
 import { isMistedToday } from "../model/misting";
-import { getLatestPlantPhotoId } from "../model/photos";
+import { getPlantPhotoIds } from "../model/photos";
 import { getWateringStatus } from "../model/watering";
 import type { PlantDisplay, UserPlant } from "../types";
+import { PlantPhotoGallery } from "./PlantPhotoGallery";
 import { WateringIndicator } from "./WateringIndicator";
 
 export interface PlantCardProps {
@@ -36,10 +32,9 @@ export function PlantCard({
 }: PlantCardProps) {
   const status = getWateringStatus(plant);
   const mistingEnabled = isMistingEnabled(plant);
-  const mistToday = isMistedToday(
-    plant.mistingHistory,
-  );
+  const mistToday = isMistedToday(plant.mistingHistory);
   const urgent = status.color === "red";
+  const photoIds = getPlantPhotoIds(plant);
 
   return (
     <motion.div
@@ -48,26 +43,25 @@ export function PlantCard({
       animate={{ opacity: 1, y: 0 }}
       className={`overflow-hidden rounded-3xl border bg-card shadow-sm ${urgent ? "border-red-200" : "border-border"}`}
     >
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onOpen}
+        onKeyDown={event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen();
+          }
+        }}
         className="flex w-full items-stretch text-left"
       >
-        <div className="relative flex-shrink-0">
-          <PlantImage
-            catalogPlant={catalogPlant}
-            photoId={getLatestPlantPhotoId(plant)}
-            emoji={display.emoji}
-            className="h-24 w-24"
-          />
-          {urgent && (
-            <div className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
-              <Droplets
-                size={11}
-                className="text-white"
-              />
-            </div>
-          )}
-        </div>
+        <PlantPhotoGallery
+          photoIds={photoIds}
+          catalogPlant={catalogPlant}
+          emoji={display.emoji}
+          onEmptyClick={onOpen}
+        />
+
         <div className="flex min-w-0 flex-1 flex-col justify-between p-3">
           <div>
             <div className="mb-0.5 flex items-start justify-between gap-1">
@@ -88,10 +82,11 @@ export function PlantCard({
             interval={plant.wateringInterval}
           />
         </div>
-      </button>
+      </div>
 
       <div className="flex border-t border-border">
         <button
+          type="button"
           onClick={onWater}
           className={`flex flex-1 items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${urgent ? "bg-primary/5 font-semibold text-primary" : "text-muted-foreground hover:text-primary"}`}
         >
@@ -103,6 +98,7 @@ export function PlantCard({
           <>
             <div className="w-px bg-border" />
             <button
+              type="button"
               onClick={onMist}
               disabled={mistToday}
               aria-label={
@@ -113,9 +109,7 @@ export function PlantCard({
               className={`flex flex-1 items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${mistToday ? "bg-sky-50 text-sky-600" : "text-muted-foreground hover:text-sky-600"}`}
             >
               <Wind size={14} />
-              {mistToday
-                ? "Опрыснуто ✓"
-                : "Опрыснуть"}
+              {mistToday ? "Опрыснуто ✓" : "Опрыснуть"}
             </button>
           </>
         )}

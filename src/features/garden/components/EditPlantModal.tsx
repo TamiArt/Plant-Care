@@ -174,6 +174,58 @@ export function EditPlantModal({
     useState(false);
   const [error, setError] = useState("");
 
+  const getEffectivePhotoCount = () => {
+    let count = 0;
+
+    for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
+      const value = photoChanges.get(index);
+      const occupied = photoChanges.has(index)
+        ? value !== null
+        : Boolean(initialPhotoIds[index]);
+
+      if (occupied) count += 1;
+    }
+
+    return count;
+  };
+
+  const getAutoReplaceIndex = () => {
+    const effectiveCount = getEffectivePhotoCount();
+
+    if (effectiveCount < MAX_PLANT_PHOTOS) {
+      for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
+        const value = photoChanges.get(index);
+        const occupied = photoChanges.has(index)
+          ? value !== null
+          : Boolean(initialPhotoIds[index]);
+
+        if (!occupied) return index;
+      }
+    }
+
+    /*
+     * photoIds хранятся в порядке добавления.
+     * Поэтому среди исходных, ещё не заменённых фото
+     * первый слот является самым старым.
+     */
+    for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
+      if (initialPhotoIds[index] && !photoChanges.has(index)) {
+        return index;
+      }
+    }
+
+    /*
+     * Если пользователь уже заменил все исходные фото,
+     * старейшим считается первое из добавленных в текущем
+     * редактировании.
+     */
+    for (const [index, value] of photoChanges) {
+      if (value) return index;
+    }
+
+    return 0;
+  };
+
   const handlePhoto = async (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
@@ -347,6 +399,27 @@ export function EditPlantModal({
             onChange={handlePhoto}
             className="hidden"
           />
+          <button
+            type="button"
+            disabled={isPreparing || isSaving}
+            onClick={() => {
+              selectedPhotoIndex.current = getAutoReplaceIndex();
+              fileRef.current?.click();
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            <ImagePlus size={15} />
+            {getEffectivePhotoCount() >= MAX_PLANT_PHOTOS
+              ? "Добавить фото — заменить самое старое"
+              : "Добавить фото"}
+          </button>
+
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            Нажмите на конкретное фото, чтобы заменить именно его. Если
+            все три места заняты, кнопка «Добавить фото» автоматически
+            заменит самое старое фото.
+          </p>
+
           {isPreparing && (
             <p className="mt-2 text-xs text-muted-foreground">
               Подготовка фотографии…
