@@ -4,7 +4,7 @@ import { Bell, CheckSquare, Droplets, FlaskConical, Home, Lightbulb, List, Penci
 import { PlantImage, type PlantImageSource } from "../../../shared/components/PlantImage";
 import { formatSupplementalLight, isMistingEnabled } from "../model/carePreferences";
 import { isMistedToday } from "../model/misting";
-import { getLatestPlantPhotoId } from "../model/photos";
+import { getLatestPlantPhotoId, getPlantPhotoIds } from "../model/photos";
 import { daysSince, getWateringStatus, type WateringStatus } from "../model/watering";
 import { insertNotePrefix } from "../noteUtils";
 import type { PlantDisplay, PlantLocation, UserPlant } from "../types";
@@ -82,7 +82,7 @@ export function UserPlantSheet({
             <button onClick={onClose} aria-label="Закрыть карточку" className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"><X size={18} /></button>
           </div>
 
-          <PlantPhotoGallery plant={up} />
+          <PlantPhotoGallery photoIds={getPlantPhotoIds(up)} catalogPlant={catalogPlant} emoji={display.emoji} />
 
           <div className="px-5 pt-3">
             <div className="flex items-start justify-between mb-2">
