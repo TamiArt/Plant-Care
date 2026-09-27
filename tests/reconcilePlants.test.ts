@@ -27,146 +27,135 @@ function plant(
     location: "home",
     notes: [],
     reminders: [],
-    createdAt:
-      "2026-08-01T10:00:00.000Z",
-    updatedAt:
-      "2026-08-17T10:00:00.000Z",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-17T10:00:00.000Z",
     deletedAt: null,
     ...overrides,
   };
 }
 
-test(
-  "keeps watering added locally while sync response is in flight",
-  () => {
-    const local = plant({
-      wateringHistory: [
-        "2026-08-17",
-      ],
-      updatedAt:
-        "2026-08-17T10:00:02.000Z",
-    });
+test("keeps watering added locally while sync response is in flight", () => {
+  const local = plant({
+    wateringHistory: ["2026-08-17"],
+    updatedAt: "2026-08-17T10:00:02.000Z",
+  });
+  const staleRemote = plant({
+    wateringHistory: [],
+    updatedAt: "2026-08-17T10:00:01.000Z",
+  });
 
-    const staleRemote = plant({
-      wateringHistory: [],
-      updatedAt:
-        "2026-08-17T10:00:01.000Z",
-    });
+  const result = mergeSyncedPlant(local, staleRemote);
 
-    const result =
-      mergeSyncedPlant(
-        local,
-        staleRemote,
-      );
+  assert.deepEqual(result.wateringHistory, ["2026-08-17"]);
+});
 
-    assert.deepEqual(
-      result.wateringHistory,
-      ["2026-08-17"],
-    );
-  },
-);
+test("keeps watering even when remote timestamp is ahead", () => {
+  const local = plant({
+    wateringHistory: ["2026-08-17"],
+    updatedAt: "2026-08-17T10:00:02.000Z",
+  });
+  const remote = plant({
+    wateringHistory: [],
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
 
-test(
-  "keeps watering even when remote timestamp is ahead",
-  () => {
-    const local = plant({
-      wateringHistory: [
-        "2026-08-17",
-      ],
-      updatedAt:
-        "2026-08-17T10:00:02.000Z",
-    });
+  const result = mergeSyncedPlant(local, remote);
 
-    const remote = plant({
-      wateringHistory: [],
-      updatedAt:
-        "2026-08-18T10:00:00.000Z",
-    });
+  assert.deepEqual(result.wateringHistory, ["2026-08-17"]);
+  assert.ok(result.updatedAt > remote.updatedAt);
+});
 
-    const result =
-      mergeSyncedPlant(
-        local,
-        remote,
-      );
+test("accepts newer remote metadata", () => {
+  const local = plant({ nickname: "Локальное имя" });
+  const remote = plant({
+    nickname: "С другого устройства",
+    updatedAt: "2026-08-17T11:00:00.000Z",
+  });
 
-    assert.deepEqual(
-      result.wateringHistory,
-      ["2026-08-17"],
-    );
+  const result = mergeSyncedPlant(local, remote);
 
-    assert.ok(
-      result.updatedAt >
-        remote.updatedAt,
-    );
-  },
-);
+  assert.equal(result.nickname, "С другого устройства");
+});
 
-test(
-  "accepts newer remote metadata",
-  () => {
-    const local = plant({
-      nickname: "Локальное имя",
-    });
+test("merges care events from both devices without duplicates", () => {
+  const local = plant({
+    wateringHistory: ["2026-08-01", "2026-08-17"],
+  });
+  const remote = plant({
+    wateringHistory: ["2026-08-01", "2026-08-10"],
+    mistingHistory: ["2026-08-12"],
+    updatedAt: "2026-08-17T11:00:00.000Z",
+  });
 
-    const remote = plant({
-      nickname: "С другого устройства",
-      updatedAt:
-        "2026-08-17T11:00:00.000Z",
-    });
+  const result = mergeSyncedPlant(local, remote);
 
-    const result =
-      mergeSyncedPlant(
-        local,
-        remote,
-      );
+  assert.deepEqual(result.wateringHistory, [
+    "2026-08-01",
+    "2026-08-10",
+    "2026-08-17",
+  ]);
+  assert.deepEqual(result.mistingHistory, ["2026-08-12"]);
+});
 
-    assert.equal(
-      result.nickname,
-      "С другого устройства",
-    );
-  },
-);
+test("preserves three locally added photos when the remote snapshot is older", () => {
+  const local = plant({
+    photoId: "photo-3",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+    updatedAt: "2026-08-17T10:00:02.000Z",
+  });
+  const remote = plant({
+    photoId: "old-photo",
+    photoIds: ["old-photo"],
+    updatedAt: "2026-08-17T10:00:01.000Z",
+  });
 
-test(
-  "merges care events from both devices without duplicates",
-  () => {
-    const local = plant({
-      wateringHistory: [
-        "2026-08-01",
-        "2026-08-17",
-      ],
-    });
+  const result = mergeSyncedPlant(local, remote);
 
-    const remote = plant({
-      wateringHistory: [
-        "2026-08-01",
-        "2026-08-10",
-      ],
-      mistingHistory: [
-        "2026-08-12",
-      ],
-      updatedAt:
-        "2026-08-17T11:00:00.000Z",
-    });
+  assert.deepEqual(result.photoIds, [
+    "photo-1",
+    "photo-2",
+    "photo-3",
+  ]);
+  assert.equal(result.photoId, "photo-3");
+});
 
-    const result =
-      mergeSyncedPlant(
-        local,
-        remote,
-      );
+test("preserves local photos even when a newer remote plant update has no gallery changes", () => {
+  const local = plant({
+    photoId: "photo-3",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+    updatedAt: "2026-08-17T10:00:02.000Z",
+  });
+  const remote = plant({
+    photoId: null,
+    photoIds: [],
+    nickname: "Изменено на другом устройстве",
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
 
-    assert.deepEqual(
-      result.wateringHistory,
-      [
-        "2026-08-01",
-        "2026-08-10",
-        "2026-08-17",
-      ],
-    );
+  const result = mergeSyncedPlant(local, remote);
 
-    assert.deepEqual(
-      result.mistingHistory,
-      ["2026-08-12"],
-    );
-  },
-);
+  assert.equal(result.nickname, "Изменено на другом устройстве");
+  assert.deepEqual(result.photoIds, [
+    "photo-1",
+    "photo-2",
+    "photo-3",
+  ]);
+  assert.equal(result.photoId, "photo-3");
+});
+
+test("keeps a legacy single photo when the remote snapshot has no gallery metadata", () => {
+  const local = plant({
+    photoId: "legacy-photo",
+    photoIds: ["legacy-photo"],
+  });
+  const remote = plant({
+    photoId: null,
+    photoIds: [],
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.deepEqual(result.photoIds, ["legacy-photo"]);
+  assert.equal(result.photoId, "legacy-photo");
+});
