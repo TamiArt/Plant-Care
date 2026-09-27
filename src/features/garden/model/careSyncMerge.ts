@@ -42,11 +42,56 @@ function mergedTimestamp(
   ).toISOString();
 }
 
+function normalizedPhotoIds(
+  plant: UserPlant,
+): string[] {
+  const ids = Array.isArray(plant.photoIds)
+    ? plant.photoIds.filter(
+        (id): id is string =>
+          typeof id === "string" && id.length > 0,
+      )
+    : [];
+
+  if (ids.length === 0 && plant.photoId) {
+    ids.push(plant.photoId);
+  }
+
+  return [...new Set(ids)];
+}
+
+/**
+ * Gallery metadata is merged independently from ordinary LWW fields.
+ * Local photoIds have priority because the local photo Blob is the source
+ * of truth for the current device until the cloud upload completes.
+ * The merged gallery is always limited to three photos.
+ */
+function mergePhotoGallery(
+  local: UserPlant,
+  remote: UserPlant,
+): Pick<UserPlant, "photoId" | "photoIds"> {
+  const localIds = normalizedPhotoIds(local);
+  const remoteIds = normalizedPhotoIds(remote);
+  const mergedIds = [
+    ...localIds,
+    ...remoteIds.filter(
+      id => !localIds.includes(id),
+    ),
+  ].slice(-3);
+
+  return {
+    photoIds: mergedIds,
+    photoId: mergedIds.at(-1) ?? null,
+  };
+}
+
 /**
  * Обычные поля выбираются по LWW.
  * Истории ухода объединяются, потому что уже
  * совершённый полив/опрыскивание/удобрение
  * нельзя потерять из-за устаревшего sync-ответа.
+ *
+ * Галерея объединяется отдельно, чтобы ответ sync не мог
+ * затереть локально добавленные фотографии.
  */
 export function mergeSyncedPlant(
   local: UserPlant,
@@ -91,6 +136,10 @@ export function mergeSyncedPlant(
 
   return {
     ...base,
+    ...mergePhotoGallery(
+      local,
+      remote,
+    ),
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
