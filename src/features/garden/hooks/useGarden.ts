@@ -105,7 +105,7 @@ export interface UpdatePlantPhotoOptions {
 
   removePhoto?: boolean;
 
-  gallery?: Array<{ index: number; photo: PreparedPhoto | null }>;
+  gallery?: Array<{ photoId?: string; photo?: PreparedPhoto }>;
 }
 
 function errorMessage(
@@ -486,59 +486,96 @@ export function useGarden() {
         } = photoOptions;
 
         if (gallery) {
-          const currentIds = getPlantPhotoIds(currentPlant);
+          const currentIds =
+            getPlantPhotoIds(
+              currentPlant,
+            );
+          const currentIdSet =
+            new Set(currentIds);
+          const retainedIds =
+            new Set<string>();
           const removedIds: string[] = [];
           const newPhotos: SavePlantPhotoInput[] = [];
-          const nextIds = [...currentIds];
+          const nextIds: string[] = [];
 
-          for (const update of gallery) {
-            const index = Math.max(
-              0,
-              Math.floor(update.index),
-            );
-            const previousId = nextIds[index];
-
-            if (previousId) {
-              removedIds.push(previousId);
+          for (const slot of gallery) {
+            if (
+              slot.photoId &&
+              currentIdSet.has(slot.photoId)
+            ) {
+              nextIds.push(slot.photoId);
+              retainedIds.add(slot.photoId);
+              continue;
             }
 
-            if (update.photo) {
-              const photoId = createId();
+            if (slot.photo) {
+              const photoId =
+                createId();
 
-              nextIds[index] = photoId;
+              nextIds.push(photoId);
 
               newPhotos.push({
                 id: photoId,
-                plantId: currentPlant.id,
-                ...update.photo,
+                plantId:
+                  currentPlant.id,
+                ...slot.photo,
               });
-            } else {
-              nextIds.splice(index, 1);
+            }
+          }
+
+          for (const photoId of currentIds) {
+            if (!retainedIds.has(photoId)) {
+              removedIds.push(photoId);
             }
           }
 
           const normalizedIds = [
-            ...new Set(
-              nextIds.filter(
-                (value): value is string =>
-                  typeof value === "string" &&
-                  value.length > 0,
-              ),
-            ),
+            ...new Set(nextIds),
           ];
 
           const requestedPrimary =
-            typeof changes.photoId === "string" &&
-            normalizedIds.includes(changes.photoId)
+            typeof changes.photoId ===
+              "string" &&
+            normalizedIds.includes(
+              changes.photoId,
+            )
               ? changes.photoId
+              : null;
+
+          const primaryPhotoIndex =
+            typeof (
+              photoOptions as
+                UpdatePlantPhotoOptions & {
+                  primaryPhotoIndex?: number | null;
+                }
+            ).primaryPhotoIndex ===
+              "number"
+              ? (
+                  photoOptions as
+                    UpdatePlantPhotoOptions & {
+                      primaryPhotoIndex?: number | null;
+                    }
+                ).primaryPhotoIndex
+              : null;
+
+          const primaryFromIndex =
+            primaryPhotoIndex !== null &&
+            primaryPhotoIndex >= 0 &&
+            primaryPhotoIndex <
+              normalizedIds.length
+              ? normalizedIds[
+                  primaryPhotoIndex
+                ]
               : null;
 
           const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
-            photoIds: normalizedIds,
+            photoIds:
+              normalizedIds,
             photoId:
               requestedPrimary ??
+              primaryFromIndex ??
               normalizedIds.at(-1) ??
               null,
             updatedAt: nowIso(),
@@ -549,7 +586,7 @@ export function useGarden() {
             await savePlantPhotoGallery(
               nextPlant,
               newPhotos,
-              [...new Set(removedIds)],
+              removedIds,
             );
 
             setPlants(current =>
