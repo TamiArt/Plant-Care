@@ -63,7 +63,7 @@ function normalizedPhotoIds(
  * Gallery metadata is merged independently from ordinary LWW fields.
  * Local photoIds have priority because the local photo Blob is the source
  * of truth for the current device until the cloud upload completes.
- * The merged gallery is always limited to three photos.
+ * The merged gallery contains the complete photo history.
  */
 function mergePhotoGallery(
   local: UserPlant,
