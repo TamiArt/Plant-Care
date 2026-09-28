@@ -544,20 +544,7 @@ export function useGarden() {
               : null;
 
           const primaryPhotoIndex =
-            typeof (
-              photoOptions as
-                UpdatePlantPhotoOptions & {
-                  primaryPhotoIndex?: number | null;
-                }
-            ).primaryPhotoIndex ===
-              "number"
-              ? (
-                  photoOptions as
-                    UpdatePlantPhotoOptions & {
-                      primaryPhotoIndex?: number | null;
-                    }
-                ).primaryPhotoIndex
-              : null;
+            photoOptions.primaryPhotoIndex ?? null;
 
           const primaryFromIndex =
             primaryPhotoIndex !== null &&
