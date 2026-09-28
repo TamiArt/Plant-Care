@@ -50,9 +50,10 @@ export interface UserPlant {
    * Blob хранится отдельно в IndexedDB.
    * Base64/Data URL здесь быть не должно.
    */
+  /** Выбранное главное фото растения. Для legacy-записей это может быть старое одиночное photoId. */
   photoId: string | null;
 
-  /** Фото в порядке добавления; последнее используется как обложка. */
+  /** Полная галерея фотографий растения в порядке добавления. */
   photoIds?: string[];
 
   wateringInterval: number;
