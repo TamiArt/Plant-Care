@@ -489,37 +489,76 @@ export function useGarden() {
           const currentIds = getPlantPhotoIds(currentPlant);
           const removedIds: string[] = [];
           const newPhotos: SavePlantPhotoInput[] = [];
-          const updates = new Map(gallery.map(update => [update.index, update.photo]));
-          const nextIds: string[] = [];
+          const nextIds = [...currentIds];
 
-          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-            const previousId = currentIds[index];
-            if (!updates.has(index)) {
-              if (previousId) nextIds.push(previousId);
-              continue;
+          for (const update of gallery) {
+            const index = Math.max(
+              0,
+              Math.floor(update.index),
+            );
+            const previousId = nextIds[index];
+
+            if (previousId) {
+              removedIds.push(previousId);
             }
-            if (previousId) removedIds.push(previousId);
-          }
-          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-            const nextPhoto = updates.get(index);
-            if (nextPhoto) {
-              const id = createId();
-              nextIds.push(id);
-              newPhotos.push({ id, plantId: currentPlant.id, ...nextPhoto });
+
+            if (update.photo) {
+              const photoId = createId();
+
+              nextIds[index] = photoId;
+
+              newPhotos.push({
+                id: photoId,
+                plantId: currentPlant.id,
+                ...update.photo,
+              });
+            } else {
+              nextIds.splice(index, 1);
             }
           }
-          const normalizedIds = nextIds.filter(Boolean).slice(0, MAX_PLANT_PHOTOS);
-          const nextPlant = {
+
+          const normalizedIds = [
+            ...new Set(
+              nextIds.filter(
+                (value): value is string =>
+                  typeof value === "string" &&
+                  value.length > 0,
+              ),
+            ),
+          ];
+
+          const requestedPrimary =
+            typeof changes.photoId === "string" &&
+            normalizedIds.includes(changes.photoId)
+              ? changes.photoId
+              : null;
+
+          const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
             photoIds: normalizedIds,
-            photoId: normalizedIds.at(-1) ?? null,
+            photoId:
+              requestedPrimary ??
+              normalizedIds.at(-1) ??
+              null,
             updatedAt: nowIso(),
             deletedAt: null,
           };
+
           return execute(async () => {
-            await savePlantPhotoGallery(nextPlant, newPhotos, removedIds);
-            setPlants(current => current.map(item => item.id === id ? nextPlant : item));
+            await savePlantPhotoGallery(
+              nextPlant,
+              newPhotos,
+              [...new Set(removedIds)],
+            );
+
+            setPlants(current =>
+              current.map(item =>
+                item.id === id
+                  ? nextPlant
+                  : item,
+              ),
+            );
           });
         }
 
