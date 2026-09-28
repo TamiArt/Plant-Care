@@ -106,6 +106,7 @@ export interface UpdatePlantPhotoOptions {
   removePhoto?: boolean;
 
   gallery?: Array<{ photoId?: string; photo?: PreparedPhoto }>;
+  primaryPhotoIndex?: number | null;
 }
 
 function errorMessage(
