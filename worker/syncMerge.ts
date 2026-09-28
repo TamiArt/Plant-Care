@@ -61,7 +61,7 @@ function normalizedPhotoIds(
 /**
  * Gallery metadata is merged independently from ordinary LWW fields.
  * The incoming snapshot is the local snapshot sent by the device, so its
- * photoIds have priority. Remote-only photos are retained when there is room.
+ * photoIds have priority. Remote-only photos are retained so both devices keep the complete gallery.
  * The final gallery is always limited to three photos.
  */
 function mergePhotoGallery<T extends CareHistoryPlant>(
