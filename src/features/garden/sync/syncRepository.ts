@@ -122,11 +122,10 @@ function normalizeRemotePlant(
     photoIds:
       Array.isArray(value.photoIds)
         ? value.photoIds
-            .filter(
+             .filter(
               (item): item is string =>
                 typeof item === "string",
             )
-            .slice(-3)
         : typeof value.photoId ===
             "string"
           ? [value.photoId]

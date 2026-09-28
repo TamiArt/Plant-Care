@@ -61,7 +61,7 @@ function normalizedPhotoIds(
 /**
  * Gallery metadata is merged independently from ordinary LWW fields.
  * The incoming snapshot is the local snapshot sent by the device, so its
- * photoIds have priority. Remote-only photos are retained when there is room.
+ * photoIds have priority. Remote-only photos are retained so both devices keep the complete gallery.
  * The final gallery is always limited to three photos.
  */
 function mergePhotoGallery<T extends CareHistoryPlant>(
@@ -75,78 +75,18 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
     ...remoteIds.filter(
       id => !incomingIds.includes(id),
     ),
-  ].slice(-3);
+  ];
+
+  const primaryPhotoId =
+    incoming.photoId &&
+    mergedIds.includes(incoming.photoId)
+      ? incoming.photoId
+      : remote.photoId &&
+          mergedIds.includes(remote.photoId)
+        ? remote.photoId
+        : mergedIds.at(-1) ?? null;
 
   return {
     photoIds: mergedIds,
-    photoId: mergedIds.at(-1) ?? null,
-  } as Pick<T, "photoId" | "photoIds">;
-}
-
-/**
- * Обычные поля остаются LWW.
- * Истории ухода — append-only события.
- * Галерея объединяется отдельно, чтобы ответ sync не мог
- * затереть локально добавленные фотографии.
- */
-export function mergeCareHistoryPlant<
-  T extends CareHistoryPlant,
->(
-  remote: T,
-  incoming: T,
-  serverNow: string,
-): T {
-  const base =
-    incoming.updatedAt > remote.updatedAt
-      ? incoming
-      : remote;
-
-  const wateringHistory =
-    mergeHistory(
-      remote.wateringHistory,
-      incoming.wateringHistory,
-    );
-
-  const mistingHistory =
-    mergeHistory(
-      remote.mistingHistory,
-      incoming.mistingHistory,
-    );
-
-  const fertilizingHistory =
-    mergeHistory(
-      remote.fertilizingHistory,
-      incoming.fertilizingHistory,
-    );
-
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
-
-  return {
-    ...base,
-    ...mergePhotoGallery(
-      incoming,
-      remote,
-    ),
-    wateringHistory,
-    mistingHistory,
-    fertilizingHistory,
-    updatedAt: historyChanged
-      ? latestTimestamp(
-          base.updatedAt,
-          serverNow,
-        )
-      : base.updatedAt,
-  };
-}
+    photoId: primaryPhotoId,
+  } as Pick<T, "photoId" | "photoIds">;}

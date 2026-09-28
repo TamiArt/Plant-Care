@@ -104,7 +104,7 @@ export function normalizeSyncPlant(value: unknown): SyncPlant {
     throw new Error(`У растения ${value.id} некорректный deletedAt.`);
   }
 
-  const photoIds = strings(value.photoIds).slice(-3);
+  const photoIds = strings(value.photoIds);
   const photoId = nullableString(value.photoId);
 
   return {
@@ -177,7 +177,7 @@ function rowToPlant(row: PlantRow): SyncPlant {
     customEmoji: row.custom_emoji ?? undefined,
     nickname: row.nickname,
     photoId: row.photo_id,
-    photoIds: stringArray(row.photo_ids).slice(-3),
+    photoIds: stringArray(row.photo_ids),
     wateringInterval: row.watering_interval,
     wateringHistory: stringArray(row.watering_history),
     mistingEnabled: row.misting_enabled !== 0,

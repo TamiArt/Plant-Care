@@ -3,6 +3,7 @@ import { PlantImage, type PlantImageSource } from "../../../shared/components/Pl
 
 export interface PlantPhotoGalleryProps {
   photoIds: string[];
+  primaryPhotoId?: string | null;
   catalogPlant?: PlantImageSource | null;
   emoji: string;
   className?: string;
@@ -13,6 +14,7 @@ export interface PlantPhotoGalleryProps {
 
 export function PlantPhotoGallery({
   photoIds,
+  primaryPhotoId,
   catalogPlant,
   emoji,
   className = "",
@@ -20,7 +22,18 @@ export function PlantPhotoGallery({
   onPhotoClick,
   enableViewer = true,
 }: PlantPhotoGalleryProps) {
-  const safePhotoIds = Array.isArray(photoIds) ? photoIds.filter(Boolean) : [];
+  const safePhotoIds = Array.isArray(photoIds)
+    ? photoIds.filter(Boolean)
+    : [];
+  const orderedPhotoIds = primaryPhotoId &&
+    safePhotoIds.includes(primaryPhotoId)
+      ? [
+          primaryPhotoId,
+          ...safePhotoIds.filter(
+            id => id !== primaryPhotoId,
+          ),
+        ]
+      : safePhotoIds;
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -28,13 +41,13 @@ export function PlantPhotoGallery({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setViewerIndex(null);
-      if (safePhotoIds.length < 2) return;
+      if (orderedPhotoIds.length < 2) return;
 
       if (event.key === "ArrowLeft") {
         setViewerIndex(current =>
           current === null
             ? null
-            : (current - 1 + safePhotoIds.length) % safePhotoIds.length,
+            : (current - 1 + orderedPhotoIds.length) % orderedPhotoIds.length,
         );
       }
 
@@ -42,27 +55,27 @@ export function PlantPhotoGallery({
         setViewerIndex(current =>
           current === null
             ? null
-            : (current + 1) % safePhotoIds.length,
+            : (current + 1) % orderedPhotoIds.length,
         );
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [enableViewer, viewerIndex, safePhotoIds.length]);
+  }, [enableViewer, viewerIndex, orderedPhotoIds.length]);
 
   useEffect(() => {
     if (
       viewerIndex !== null &&
       (!enableViewer ||
         viewerIndex < 0 ||
-        viewerIndex >= safePhotoIds.length)
+        viewerIndex >= orderedPhotoIds.length)
     ) {
       setViewerIndex(null);
     }
-  }, [enableViewer, viewerIndex, safePhotoIds.length]);
+  }, [enableViewer, viewerIndex, orderedPhotoIds.length]);
 
-  const count = safePhotoIds.length;
+  const count = orderedPhotoIds.length;
 
   const handlePhotoClick = (index: number) => {
     if (enableViewer) {
@@ -102,7 +115,7 @@ export function PlantPhotoGallery({
                   : "grid h-full w-full grid-cols-2 grid-rows-2 gap-px"
             }
           >
-            {safePhotoIds.map((photoId, index) => (
+            {orderedPhotoIds.slice(0, 4).map((photoId, index) => (
               <button
                 key={photoId}
                 type="button"
@@ -113,7 +126,7 @@ export function PlantPhotoGallery({
                     : "Открыть карточку растения"
                 }
                 className={
-                  count === 3 && index === 0
+                  count >= 3 && index === 0
                     ? "relative min-h-0 min-w-0 row-span-2 overflow-hidden"
                     : "relative min-h-0 min-w-0 overflow-hidden"
                 }
@@ -134,7 +147,7 @@ export function PlantPhotoGallery({
         )}
       </div>
 
-      {enableViewer && viewerIndex !== null && safePhotoIds[viewerIndex] && (
+      {enableViewer && viewerIndex !== null && orderedPhotoIds[viewerIndex] && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           role="dialog"
@@ -183,7 +196,7 @@ export function PlantPhotoGallery({
             onClick={event => event.stopPropagation()}
           >
             <PlantImage
-              photoId={safePhotoIds[viewerIndex]}
+              photoId={orderedPhotoIds[viewerIndex]}
               className="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain"
             />
             {count > 1 && (

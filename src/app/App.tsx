@@ -548,6 +548,7 @@ const {
               photo,
               removePhoto,
               gallery,
+              primaryPhotoIndex,
             }: EditPlantSaveData) => {
               const result =
                 await garden.updatePlant(
@@ -557,6 +558,7 @@ const {
                     photo,
                     removePhoto,
                     gallery,
+                    primaryPhotoIndex,
                   },
                 );
               return result.ok;

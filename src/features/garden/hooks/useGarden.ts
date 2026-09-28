@@ -34,7 +34,7 @@ import {
 import {
   migrateSyncMetadata,
 } from "../repository/migrateSyncMetadata";
-import { getPlantPhotoIds, MAX_PLANT_PHOTOS } from "../model/photos";
+import { getPlantPhotoIds } from "../model/photos";
 
 import {
   syncGarden,
@@ -105,7 +105,8 @@ export interface UpdatePlantPhotoOptions {
 
   removePhoto?: boolean;
 
-  gallery?: Array<{ index: number; photo: PreparedPhoto | null }>;
+  gallery?: Array<{ photoId?: string; photo?: PreparedPhoto }>;
+  primaryPhotoIndex?: number | null;
 }
 
 function errorMessage(
@@ -486,40 +487,103 @@ export function useGarden() {
         } = photoOptions;
 
         if (gallery) {
-          const currentIds = getPlantPhotoIds(currentPlant);
+          const currentIds =
+            getPlantPhotoIds(
+              currentPlant,
+            );
+          const currentIdSet =
+            new Set(currentIds);
+          const retainedIds =
+            new Set<string>();
           const removedIds: string[] = [];
           const newPhotos: SavePlantPhotoInput[] = [];
-          const updates = new Map(gallery.map(update => [update.index, update.photo]));
           const nextIds: string[] = [];
 
-          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-            const previousId = currentIds[index];
-            if (!updates.has(index)) {
-              if (previousId) nextIds.push(previousId);
+          for (const slot of gallery) {
+            if (
+              slot.photoId &&
+              currentIdSet.has(slot.photoId)
+            ) {
+              nextIds.push(slot.photoId);
+              retainedIds.add(slot.photoId);
               continue;
             }
-            if (previousId) removedIds.push(previousId);
-          }
-          for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-            const nextPhoto = updates.get(index);
-            if (nextPhoto) {
-              const id = createId();
-              nextIds.push(id);
-              newPhotos.push({ id, plantId: currentPlant.id, ...nextPhoto });
+
+            if (slot.photo) {
+              const photoId =
+                createId();
+
+              nextIds.push(photoId);
+
+              newPhotos.push({
+                id: photoId,
+                plantId:
+                  currentPlant.id,
+                ...slot.photo,
+              });
             }
           }
-          const normalizedIds = nextIds.filter(Boolean).slice(0, MAX_PLANT_PHOTOS);
-          const nextPlant = {
+
+          for (const photoId of currentIds) {
+            if (!retainedIds.has(photoId)) {
+              removedIds.push(photoId);
+            }
+          }
+
+          const normalizedIds = [
+            ...new Set(nextIds),
+          ];
+
+          const requestedPrimary =
+            typeof changes.photoId ===
+              "string" &&
+            normalizedIds.includes(
+              changes.photoId,
+            )
+              ? changes.photoId
+              : null;
+
+          const primaryPhotoIndex =
+            photoOptions.primaryPhotoIndex ?? null;
+
+          const primaryFromIndex =
+            primaryPhotoIndex !== null &&
+            primaryPhotoIndex >= 0 &&
+            primaryPhotoIndex <
+              normalizedIds.length
+              ? normalizedIds[
+                  primaryPhotoIndex
+                ]
+              : null;
+
+          const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
-            photoIds: normalizedIds,
-            photoId: normalizedIds.at(-1) ?? null,
+            photoIds:
+              normalizedIds,
+            photoId:
+              requestedPrimary ??
+              primaryFromIndex ??
+              normalizedIds.at(-1) ??
+              null,
             updatedAt: nowIso(),
             deletedAt: null,
           };
+
           return execute(async () => {
-            await savePlantPhotoGallery(nextPlant, newPhotos, removedIds);
-            setPlants(current => current.map(item => item.id === id ? nextPlant : item));
+            await savePlantPhotoGallery(
+              nextPlant,
+              newPhotos,
+              removedIds,
+            );
+
+            setPlants(current =>
+              current.map(item =>
+                item.id === id
+                  ? nextPlant
+                  : item,
+              ),
+            );
           });
         }
 

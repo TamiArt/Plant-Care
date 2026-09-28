@@ -4,7 +4,7 @@ import { Bell, CheckSquare, Droplets, FlaskConical, Home, Lightbulb, List, Penci
 import { PlantImage, type PlantImageSource } from "../../../shared/components/PlantImage";
 import { formatSupplementalLight, isMistingEnabled } from "../model/carePreferences";
 import { isMistedToday } from "../model/misting";
-import { getLatestPlantPhotoId, getPlantPhotoIds } from "../model/photos";
+import { getPrimaryPlantPhotoId, getPlantPhotoIds } from "../model/photos";
 import { daysSince, getWateringStatus, type WateringStatus } from "../model/watering";
 import { insertNotePrefix } from "../noteUtils";
 import type { PlantDisplay, PlantLocation, UserPlant } from "../types";
@@ -78,11 +78,11 @@ export function UserPlantSheet({
 
         <div className="flex-1 overflow-y-auto">
           <div className="relative">
-            <PlantImage catalogPlant={catalogPlant} photoId={getLatestPlantPhotoId(up)} emoji={display.emoji} className="w-full h-48" />
+            <PlantImage catalogPlant={catalogPlant} photoId={getPrimaryPlantPhotoId(up)} emoji={display.emoji} className="w-full h-48" />
             <button onClick={onClose} aria-label="Закрыть карточку" className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"><X size={18} /></button>
           </div>
 
-          <PlantPhotoGallery photoIds={getPlantPhotoIds(up)} catalogPlant={catalogPlant} emoji={display.emoji} />
+          <PlantPhotoGallery photoIds={getPlantPhotoIds(up)} primaryPhotoId={getPrimaryPlantPhotoId(up)} catalogPlant={catalogPlant} emoji={display.emoji} />
 
           <div className="px-5 pt-3">
             <div className="flex items-start justify-between mb-2">
