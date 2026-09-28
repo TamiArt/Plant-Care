@@ -60,6 +60,8 @@ export function PlantCard({
           photoIds={photoIds}
           primaryPhotoId={primaryPhotoId}
           catalogPlant={catalogPlant}
+          enableViewer={false}
+          onPhotoClick={onOpen}
           emoji={display.emoji}
           onEmptyClick={onOpen}
         />
