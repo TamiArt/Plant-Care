@@ -75,7 +75,7 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
     ...remoteIds.filter(
       id => !incomingIds.includes(id),
     ),
-  ].slice(-3);
+  ];
 
   return {
     photoIds: mergedIds,
