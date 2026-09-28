@@ -159,3 +159,50 @@ test("keeps a legacy single photo when the remote snapshot has no gallery metada
   assert.deepEqual(result.photoIds, ["legacy-photo"]);
   assert.equal(result.photoId, "legacy-photo");
 });
+
+
+test("merges all photos from local and remote without truncating the gallery", () => {
+  const local = plant({
+    photoId: "local-primary",
+    photoIds: ["old-1", "local-primary", "local-3", "local-4"],
+  });
+  const remote = plant({
+    photoId: "remote-primary",
+    photoIds: ["old-1", "remote-2", "remote-primary"],
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.deepEqual(result.photoIds, [
+    "old-1",
+    "local-primary",
+    "local-3",
+    "local-4",
+    "remote-2",
+    "remote-primary",
+  ]);
+  assert.equal(result.photoId, "local-primary");
+});
+
+test("preserves a primary photo selected locally during sync", () => {
+  const local = plant({
+    photoId: "photo-2",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+    updatedAt: "2026-08-17T10:00:02.000Z",
+  });
+  const remote = plant({
+    photoId: "photo-1",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.deepEqual(result.photoIds, [
+    "photo-1",
+    "photo-2",
+    "photo-3",
+  ]);
+  assert.equal(result.photoId, "photo-2");
+});
