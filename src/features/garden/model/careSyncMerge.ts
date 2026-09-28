@@ -78,11 +78,19 @@ function mergePhotoGallery(
     ),
   ];
 
+  const primaryPhotoId =
+    local.photoId &&
+    mergedIds.includes(local.photoId)
+      ? local.photoId
+      : remote.photoId &&
+          mergedIds.includes(remote.photoId)
+        ? remote.photoId
+        : mergedIds.at(-1) ?? null;
+
   return {
     photoIds: mergedIds,
-    photoId: mergedIds.at(-1) ?? null,
-  };
-}
+    photoId: primaryPhotoId,
+  };}
 
 /**
  * Обычные поля выбираются по LWW.
