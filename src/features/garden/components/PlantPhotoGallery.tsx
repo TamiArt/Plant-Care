@@ -115,7 +115,7 @@ export function PlantPhotoGallery({
                   : "grid h-full w-full grid-cols-2 grid-rows-2 gap-px"
             }
           >
-            {orderedPhotoIds.map((photoId, index) => (
+            {orderedPhotoIds.slice(0, 4).map((photoId, index) => (
               <button
                 key={photoId}
                 type="button"
