@@ -35,14 +35,24 @@ export interface EditPlantSaveData {
   changes: Partial<UserPlant>;
   photo: PreparedPhoto | null;
   removePhoto: boolean;
-  gallery: Array<{ index: number; photo: PreparedPhoto | null }>;
+  gallery: Array<{ photoId?: string; photo?: PreparedPhoto }>;
+  primaryPhotoIndex: number | null;
 }
 
-function PhotoSlot({ photoId, photo, onSelect, onRemove }: {
+function PhotoSlot({
+  photoId,
+  photo,
+  isPrimary,
+  onSelect,
+  onMakePrimary,
+  onRemove,
+}: {
   photoId?: string;
   photo?: PreparedPhoto;
+  isPrimary: boolean;
   onSelect: () => void;
-  onRemove?: () => void;
+  onMakePrimary: () => void;
+  onRemove: () => void;
 }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [date, setDate] = useState("");
@@ -70,7 +80,7 @@ function PhotoSlot({ photoId, photo, onSelect, onRemove }: {
       <button
         type="button"
         onClick={onSelect}
-        className="h-24 w-full overflow-hidden rounded-xl border border-border bg-secondary"
+        className="relative h-28 w-full overflow-hidden rounded-xl border border-border bg-secondary"
       >
         {preview || photoId ? (
           <PlantImage
@@ -83,23 +93,44 @@ function PhotoSlot({ photoId, photo, onSelect, onRemove }: {
             <ImagePlus size={22} />
           </span>
         )}
+        {isPrimary && (
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-primary px-2 py-1 text-[9px] font-bold text-primary-foreground">
+            Главное
+          </span>
+        )}
       </button>
-      <div className="mt-1 flex items-center justify-between gap-1">
-        <span className="truncate text-[10px] text-muted-foreground">
-          {date
-            ? new Date(date).toLocaleDateString("ru-RU")
-            : "Добавить фото"}
-        </span>
-        {(photoId || photo) && onRemove && (
+
+      <div className="mt-1 flex items-center gap-1">
+        {!isPrimary && (
           <button
             type="button"
-            onClick={onRemove}
-            className="text-[10px] text-red-500"
+            onClick={onMakePrimary}
+            className="min-w-0 flex-1 truncate text-left text-[10px] font-medium text-primary"
           >
-            Удалить
+            Сделать главным
           </button>
         )}
+        {isPrimary && (
+          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+            Показывается в карточке
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-[10px] text-red-500"
+        >
+          Удалить
+        </button>
       </div>
+
+      <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+        {date
+          ? new Date(date).toLocaleDateString("ru-RU")
+          : photo
+            ? "Новое фото"
+            : ""}
+      </span>
     </div>
   );
 }
@@ -164,66 +195,170 @@ export function EditPlantModal({
   const [description, setDescription] =
     useState(up.customDescription ?? "");
   const initialPhotoIds = getPlantPhotoIds(up);
-  const [photoChanges, setPhotoChanges] = useState(
-    new Map<number, PreparedPhoto | null>(),
+  const [photoSlots, setPhotoSlots] = useState<
+    Array<{ photoId?: string; photo?: PreparedPhoto }>
+  >(() =>
+    initialPhotoIds.map(photoId => ({
+      photoId,
+    })),
   );
-  const selectedPhotoIndex = useRef(0);
+  const [primaryPhotoIndex, setPrimaryPhotoIndex] =
+    useState<number | null>(() => {
+      const primaryId =
+        typeof up.photoId === "string"
+          ? up.photoId
+          : null;
+      const index = primaryId
+        ? initialPhotoIds.indexOf(primaryId)
+        : -1;
+
+      return index >= 0
+        ? index
+        : initialPhotoIds.length > 0
+          ? initialPhotoIds.length - 1
+          : null;
+    });
   const [isPreparing, setIsPreparing] =
     useState(false);
   const [isSaving, setIsSaving] =
     useState(false);
   const [error, setError] = useState("");
 
-  const getEffectivePhotoCount = () => {
-    let count = 0;
+  const selectedPhotoIndex = useRef<number | null>(null);
 
-    for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-      const value = photoChanges.get(index);
-      const occupied = photoChanges.has(index)
-        ? value !== null
-        : Boolean(initialPhotoIds[index]);
+  const handlePhoto = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    const index = selectedPhotoIndex.current;
+    event.target.value = "";
 
-      if (occupied) count += 1;
+    if (!file || index === null) {
+      return;
     }
 
-    return count;
+    setIsPreparing(true);
+    setError("");
+
+    try {
+      const prepared = await preparePhoto(file);
+
+      setPhotoSlots(current => {
+        const next = [...current];
+
+        while (next.length < index) {
+          next.push({});
+        }
+
+        next[index] = {
+          photo: prepared,
+        };
+
+        return next;
+      });
+
+      if (primaryPhotoIndex === null) {
+        setPrimaryPhotoIndex(index);
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Не удалось обработать фотографию.",
+      );
+    } finally {
+      setIsPreparing(false);
+      selectedPhotoIndex.current = null;
+    }
   };
 
-  const getAutoReplaceIndex = () => {
-    const effectiveCount = getEffectivePhotoCount();
+  const handleSelectPhoto = (index: number) => {
+    selectedPhotoIndex.current = index;
+    fileRef.current?.click();
+  };
 
-    if (effectiveCount < MAX_PLANT_PHOTOS) {
-      for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-        const value = photoChanges.get(index);
-        const occupied = photoChanges.has(index)
-          ? value !== null
-          : Boolean(initialPhotoIds[index]);
+  const handleAddPhoto = () => {
+    selectedPhotoIndex.current = photoSlots.length;
+    fileRef.current?.click();
+  };
 
-        if (!occupied) return index;
+  const handleRemovePhoto = (index: number) => {
+    setPhotoSlots(current =>
+      current.filter((_, itemIndex) =>
+        itemIndex !== index,
+      ),
+    );
+
+    setPrimaryPhotoIndex(current => {
+      if (current === null) return null;
+      if (current === index) {
+        const nextLength = photoSlots.length - 1;
+        return nextLength > 0
+          ? Math.min(index, nextLength - 1)
+          : null;
       }
+      return current > index
+        ? current - 1
+        : current;
+    });
+  };
+
+  const handleSave = async () => {
+    if (
+      !nickname.trim() ||
+      isPreparing ||
+      isSaving
+    ) {
+      return;
     }
 
-    /*
-     * photoIds хранятся в порядке добавления.
-     * Поэтому среди исходных, ещё не заменённых фото
-     * первый слот является самым старым.
-     */
-    for (let index = 0; index < MAX_PLANT_PHOTOS; index += 1) {
-      if (initialPhotoIds[index] && !photoChanges.has(index)) {
-        return index;
-      }
+    if (
+      lightEnabled &&
+      lightStart === lightEnd
+    ) {
+      setError(
+        "Время начала и окончания дополнительного освещения должно отличаться.",
+      );
+      return;
     }
 
-    /*
-     * Если пользователь уже заменил все исходные фото,
-     * старейшим считается первое из добавленных в текущем
-     * редактировании.
-     */
-    for (const [index, value] of photoChanges) {
-      if (value) return index;
-    }
+    setIsSaving(true);
+    setError("");
 
-    return 0;
+    const saved = await onSave({
+      changes: {
+        nickname: nickname.trim(),
+        wateringInterval,
+        fertilizingInterval,
+        mistingEnabled,
+        supplementalLight:
+          lightEnabled
+            ? {
+                start: lightStart,
+                end: lightEnd,
+              }
+            : null,
+        wateringHistory:
+          replaceLastWateringDate(
+            up.wateringHistory,
+            lastWateringDate || null,
+          ),
+        customDescription:
+          description.trim() || undefined,
+      },
+      photo: null,
+      removePhoto: false,
+      gallery: photoSlots,
+      primaryPhotoIndex,
+    });
+
+    setIsSaving(false);
+
+    if (saved) {
+      onClose();
+    } else {
+      setError("Не удалось сохранить изменения.");
+    }
   };
 
   const handlePhoto = async (
@@ -348,49 +483,43 @@ export function EditPlantModal({
         </div>
 
         <div className="mb-4 rounded-2xl bg-secondary p-3">
-          <p className="mb-2 text-xs font-medium text-foreground">
-            Фотографии · максимум {MAX_PLANT_PHOTOS}
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {Array.from(
-              { length: MAX_PLANT_PHOTOS },
-              (_, index) => {
-                const changed =
-                  photoChanges.get(index);
-                const removed =
-                  photoChanges.has(index) &&
-                  changed === null;
-
-                return (
-                  <PhotoSlot
-                    key={index}
-                    photoId={
-                      removed
-                        ? undefined
-                        : initialPhotoIds[index]
-                    }
-                    photo={changed ?? undefined}
-                    onSelect={() => {
-                      selectedPhotoIndex.current =
-                        index;
-                      fileRef.current?.click();
-                    }}
-                    onRemove={
-                      initialPhotoIds[index] || changed
-                        ? () =>
-                            setPhotoChanges(current =>
-                              new Map(current).set(
-                                index,
-                                null,
-                              ),
-                            )
-                        : undefined
-                    }
-                  />
-                );
-              },
-            )}
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-xs font-medium text-foreground">
+              Фотографии растения
+            </p>
+            <span className="text-[10px] text-muted-foreground">
+              {photoSlots.length} фото
+            </span>
           </div>
+
+          {photoSlots.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {photoSlots.map((slot, index) => (
+                <PhotoSlot
+                  key={slot.photoId ?? `new-${index}`}
+                  photoId={slot.photoId}
+                  photo={slot.photo}
+                  isPrimary={
+                    primaryPhotoIndex === index
+                  }
+                  onSelect={() =>
+                    handleSelectPhoto(index)
+                  }
+                  onMakePrimary={() =>
+                    setPrimaryPhotoIndex(index)
+                  }
+                  onRemove={() =>
+                    handleRemovePhoto(index)
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              Пока нет фотографий.
+            </p>
+          )}
+
           <input
             ref={fileRef}
             type="file"
@@ -399,25 +528,21 @@ export function EditPlantModal({
             onChange={handlePhoto}
             className="hidden"
           />
+
           <button
             type="button"
             disabled={isPreparing || isSaving}
-            onClick={() => {
-              selectedPhotoIndex.current = getAutoReplaceIndex();
-              fileRef.current?.click();
-            }}
+            onClick={handleAddPhoto}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-40"
           >
             <ImagePlus size={15} />
-            {getEffectivePhotoCount() >= MAX_PLANT_PHOTOS
-              ? "Добавить фото — заменить самое старое"
-              : "Добавить фото"}
+            Добавить фотографию
           </button>
 
           <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-            Нажмите на конкретное фото, чтобы заменить именно его. Если
-            все три места заняты, кнопка «Добавить фото» автоматически
-            заменит самое старое фото.
+            Все фотографии сохраняются. Нажмите «Сделать главным»,
+            чтобы выбрать фото, которое будет показываться в общей
+            карточке растения.
           </p>
 
           {isPreparing && (
