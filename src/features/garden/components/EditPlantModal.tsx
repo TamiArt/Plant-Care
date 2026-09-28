@@ -25,7 +25,7 @@ import {
 } from "../services/preparePhoto";
 import type { UserPlant } from "../types";
 import { getPlantPhoto } from "../repository/gardenRepository";
-import { getPlantPhotoIds, MAX_PLANT_PHOTOS } from "../model/photos";
+import { getPlantPhotoIds } from "../model/photos";
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
