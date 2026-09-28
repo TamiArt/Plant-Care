@@ -34,7 +34,7 @@ import {
 import {
   migrateSyncMetadata,
 } from "../repository/migrateSyncMetadata";
-import { getPlantPhotoIds, MAX_PLANT_PHOTOS } from "../model/photos";
+import { getPlantPhotoIds } from "../model/photos";
 
 import {
   syncGarden,
