@@ -76,7 +76,7 @@ function mergePhotoGallery(
     ...remoteIds.filter(
       id => !localIds.includes(id),
     ),
-  ].slice(-3);
+  ];
 
   return {
     photoIds: mergedIds,
