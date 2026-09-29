@@ -35,6 +35,7 @@ import {
   migrateSyncMetadata,
 } from "../repository/migrateSyncMetadata";
 import { getPlantPhotoIds } from "../model/photos";
+import { buildPhotoGallery } from "../model/photoGallery";
 
 import {
   syncGarden,
@@ -487,85 +488,33 @@ export function useGarden() {
         } = photoOptions;
 
         if (gallery) {
-          const currentIds =
-            getPlantPhotoIds(
-              currentPlant,
+          const galleryResult =
+            buildPhotoGallery(
+              getPlantPhotoIds(
+                currentPlant,
+              ),
+              currentPlant.photoId,
+              gallery,
+              photoOptions.primaryPhotoIndex ?? null,
+              createId,
             );
-          const currentIdSet =
-            new Set(currentIds);
-          const retainedIds =
-            new Set<string>();
-          const removedIds: string[] = [];
-          const newPhotos: SavePlantPhotoInput[] = [];
-          const nextIds: string[] = [];
-
-          for (const slot of gallery) {
-            if (
-              slot.photoId &&
-              currentIdSet.has(slot.photoId)
-            ) {
-              nextIds.push(slot.photoId);
-              retainedIds.add(slot.photoId);
-              continue;
-            }
-
-            if (slot.photo) {
-              const photoId =
-                createId();
-
-              nextIds.push(photoId);
-
-              newPhotos.push({
-                id: photoId,
-                plantId:
-                  currentPlant.id,
-                ...slot.photo,
-              });
-            }
-          }
-
-          for (const photoId of currentIds) {
-            if (!retainedIds.has(photoId)) {
-              removedIds.push(photoId);
-            }
-          }
-
-          const normalizedIds = [
-            ...new Set(nextIds),
-          ];
 
           const requestedPrimary =
-            typeof changes.photoId ===
-              "string" &&
-            normalizedIds.includes(
+            typeof changes.photoId === "string" &&
+            galleryResult.photoIds.includes(
               changes.photoId,
             )
               ? changes.photoId
-              : null;
-
-          const primaryPhotoIndex =
-            photoOptions.primaryPhotoIndex ?? null;
-
-          const primaryFromIndex =
-            primaryPhotoIndex !== null &&
-            primaryPhotoIndex >= 0 &&
-            primaryPhotoIndex <
-              normalizedIds.length
-              ? normalizedIds[
-                  primaryPhotoIndex
-                ]
               : null;
 
           const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
             photoIds:
-              normalizedIds,
+              galleryResult.photoIds,
             photoId:
               requestedPrimary ??
-              primaryFromIndex ??
-              normalizedIds.at(-1) ??
-              null,
+              galleryResult.primaryPhotoId,
             updatedAt: nowIso(),
             deletedAt: null,
           };
@@ -573,8 +522,12 @@ export function useGarden() {
           return execute(async () => {
             await savePlantPhotoGallery(
               nextPlant,
-              newPhotos,
-              removedIds,
+              galleryResult.newPhotos.map(item => ({
+                id: item.id,
+                plantId: currentPlant.id,
+                ...item.photo,
+              })),
+              galleryResult.removedPhotoIds,
             );
 
             setPlants(current =>
@@ -592,8 +545,30 @@ export function useGarden() {
             ? createId()
             : removePhoto
               ? null
-              : currentPlant
-                  .photoId;
+              : currentPlant.photoId;
+
+        const currentPhotoIds =
+          getPlantPhotoIds(
+            currentPlant,
+          );
+
+        const nextPhotoIds =
+          photo
+            ? [
+                ...currentPhotoIds.filter(
+                  id =>
+                    id !==
+                    currentPlant.photoId,
+                ),
+                nextPhotoId!,
+              ]
+            : removePhoto
+              ? currentPhotoIds.filter(
+                  id =>
+                    id !==
+                    currentPlant.photoId,
+                )
+              : currentPhotoIds;
 
         const nextPlant:
           UserPlant = {
@@ -606,6 +581,9 @@ export function useGarden() {
 
           photoId:
             nextPhotoId,
+
+          photoIds:
+            nextPhotoIds,
 
           createdAt:
             currentPlant

@@ -94,6 +94,35 @@ function normalizeLight(value: unknown): SupplementalLightSchedule | null {
   return { start: value.start, end: value.end };
 }
 
+function normalizePhotoGallery(
+  photoId: string | null,
+  value: unknown,
+): { photoId: string | null; photoIds: string[] } {
+  const ids = [
+    ...new Set(
+      strings(value).filter(
+        id => id.length > 0,
+      ),
+    ),
+  ];
+
+  if (
+    photoId &&
+    !ids.includes(photoId)
+  ) {
+    ids.unshift(photoId);
+  }
+
+  return {
+    photoIds: ids,
+    photoId:
+      photoId &&
+      ids.includes(photoId)
+        ? photoId
+        : ids[0] ?? null,
+  };
+}
+
 export function normalizeSyncPlant(value: unknown): SyncPlant {
   if (!isRecord(value)) throw new Error("Некорректная запись растения.");
   if (typeof value.id !== "string" || !value.id) throw new Error("У растения отсутствует id.");
@@ -104,8 +133,13 @@ export function normalizeSyncPlant(value: unknown): SyncPlant {
     throw new Error(`У растения ${value.id} некорректный deletedAt.`);
   }
 
-  const photoIds = strings(value.photoIds);
-  const photoId = nullableString(value.photoId);
+  const photoId =
+    nullableString(value.photoId);
+  const gallery =
+    normalizePhotoGallery(
+      photoId,
+      value.photoIds,
+    );
 
   return {
     id: value.id,
@@ -115,8 +149,8 @@ export function normalizeSyncPlant(value: unknown): SyncPlant {
     customDescription: optionalString(value.customDescription),
     customEmoji: optionalString(value.customEmoji),
     nickname: value.nickname,
-    photoId,
-    photoIds: photoIds.length ? photoIds : photoId ? [photoId] : [],
+    photoId: gallery.photoId,
+    photoIds: gallery.photoIds,
     wateringInterval: numberOr(value.wateringInterval, 7),
     wateringHistory: strings(value.wateringHistory),
     mistingEnabled: value.mistingEnabled !== false,

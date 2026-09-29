@@ -48,6 +48,39 @@ function isIsoDate(
   );
 }
 
+function normalizePhotoGallery(
+  photoId: string | null,
+  value: unknown,
+): { photoId: string | null; photoIds: string[] } {
+  const ids = Array.isArray(value)
+    ? value.filter(
+        (item): item is string =>
+          typeof item === "string" &&
+          item.length > 0,
+      )
+    : [];
+
+  const uniqueIds = [
+    ...new Set(ids),
+  ];
+
+  if (
+    photoId &&
+    !uniqueIds.includes(photoId)
+  ) {
+    uniqueIds.unshift(photoId);
+  }
+
+  return {
+    photoIds: uniqueIds,
+    photoId:
+      photoId &&
+      uniqueIds.includes(photoId)
+        ? photoId
+        : uniqueIds[0] ?? null,
+  };
+}
+
 function normalizeRemotePlant(
   value: unknown,
 ): UserPlant {
@@ -113,23 +146,12 @@ function normalizeRemotePlant(
     nickname:
       value.nickname,
 
-    photoId:
-      typeof value.photoId ===
-      "string"
+    ...normalizePhotoGallery(
+      typeof value.photoId === "string"
         ? value.photoId
         : null,
-
-    photoIds:
-      Array.isArray(value.photoIds)
-        ? value.photoIds
-             .filter(
-              (item): item is string =>
-                typeof item === "string",
-            )
-        : typeof value.photoId ===
-            "string"
-          ? [value.photoId]
-          : [],
+      value.photoIds,
+    ),
 
     wateringInterval:
       typeof value

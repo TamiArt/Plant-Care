@@ -524,6 +524,12 @@ const {
                 id
               )
             }
+            onMakePrimaryPhoto={photoId => {
+              void garden.updatePlant(
+                liveDetail.id,
+                { photoId },
+              );
+            }}
           />
         )}
         {editTarget && (

@@ -40,6 +40,7 @@ export function UserPlantSheet({
   onAddReminder: (title: string, date: string) => void;
   onToggleReminder: (reminderId: string) => void;
   onDeleteReminder: (reminderId: string) => void;
+  onMakePrimaryPhoto: (photoId: string) => void;
 }) {
   const status = getWateringStatus(up);
   const [activeTab, setActiveTab] = useState<PlantTab>("care");
@@ -82,7 +83,13 @@ export function UserPlantSheet({
             <button onClick={onClose} aria-label="Закрыть карточку" className="absolute top-3 right-3 w-9 h-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"><X size={18} /></button>
           </div>
 
-          <PlantPhotoGallery photoIds={getPlantPhotoIds(up)} primaryPhotoId={getPrimaryPlantPhotoId(up)} catalogPlant={catalogPlant} emoji={display.emoji} />
+          <PlantPhotoGallery
+            photoIds={getPlantPhotoIds(up)}
+            primaryPhotoId={getPrimaryPlantPhotoId(up)}
+            catalogPlant={catalogPlant}
+            emoji={display.emoji}
+            onMakePrimaryPhoto={onMakePrimaryPhoto}
+          />
 
           <div className="px-5 pt-3">
             <div className="flex items-start justify-between mb-2">
