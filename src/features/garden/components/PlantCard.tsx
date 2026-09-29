@@ -7,7 +7,7 @@ import {
 import type { PlantImageSource } from "../../../shared/components/PlantImage";
 import { isMistingEnabled } from "../model/carePreferences";
 import { isMistedToday } from "../model/misting";
-import { getPlantPhotoIds, getPrimaryPlantPhotoId } from "../model/photos";
+import { getPrimaryPlantPhotoId } from "../model/photos";
 import { getWateringStatus } from "../model/watering";
 import type { PlantDisplay, UserPlant } from "../types";
 import { PlantPhotoGallery } from "./PlantPhotoGallery";
@@ -34,7 +34,6 @@ export function PlantCard({
   const mistingEnabled = isMistingEnabled(plant);
   const mistToday = isMistedToday(plant.mistingHistory);
   const urgent = status.color === "red";
-  const photoIds = getPlantPhotoIds(plant);
   const primaryPhotoId = getPrimaryPlantPhotoId(plant);
 
   return (
@@ -57,7 +56,7 @@ export function PlantCard({
         className="flex w-full items-stretch text-left"
       >
         <PlantPhotoGallery
-          photoIds={photoIds}
+          photoIds={primaryPhotoId ? [primaryPhotoId] : []}
           primaryPhotoId={primaryPhotoId}
           catalogPlant={catalogPlant}
           enableViewer={false}
