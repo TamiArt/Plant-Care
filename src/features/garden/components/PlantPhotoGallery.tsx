@@ -9,6 +9,7 @@ export interface PlantPhotoGalleryProps {
   className?: string;
   onEmptyClick?: () => void;
   onPhotoClick?: () => void;
+  onMakePrimaryPhoto?: (photoId: string) => void;
   enableViewer?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function PlantPhotoGallery({
   className = "",
   onEmptyClick,
   onPhotoClick,
+  onMakePrimaryPhoto,
   enableViewer = true,
 }: PlantPhotoGalleryProps) {
   const safePhotoIds = Array.isArray(photoIds)
@@ -197,13 +199,39 @@ export function PlantPhotoGallery({
           >
             <PlantImage
               photoId={orderedPhotoIds[viewerIndex]}
-              className="max-h-[88vh] max-w-[92vw] rounded-2xl object-contain"
+              className="max-h-[78vh] max-w-[92vw] rounded-2xl object-contain"
             />
-            {count > 1 && (
-              <p className="mt-2 text-center text-xs text-white/70">
-                {viewerIndex + 1} / {count}
-              </p>
-            )}
+
+            <div className="mt-3 flex flex-col items-center gap-2">
+              {onMakePrimaryPhoto && (
+                <button
+                  type="button"
+                  disabled={
+                    orderedPhotoIds[viewerIndex] ===
+                    primaryPhotoId
+                  }
+                  onClick={event => {
+                    event.stopPropagation();
+                    const photoId =
+                      orderedPhotoIds[viewerIndex];
+                    if (!photoId) return;
+                    onMakePrimaryPhoto(photoId);
+                    setViewerIndex(0);
+                  }}
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black shadow-lg disabled:bg-white/20 disabled:text-white/60"
+                >
+                  {orderedPhotoIds[viewerIndex] === primaryPhotoId
+                    ? "Главное фото"
+                    : "Сделать главным"}
+                </button>
+              )}
+
+              {count > 1 && (
+                <p className="text-center text-xs text-white/70">
+                  {viewerIndex + 1} / {count}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
