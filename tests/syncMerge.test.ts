@@ -136,3 +136,87 @@ test(
     );
   },
 );
+
+
+test(
+  "keeps the complete photo gallery during cloud merge",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1"],
+    });
+    const incoming = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T14:00:00.000Z",
+    );
+
+    assert.deepEqual(
+      result.photoIds,
+      ["photo-1", "photo-2", "photo-3"],
+    );
+    assert.equal(
+      result.photoId,
+      "photo-1",
+    );
+  },
+);
+
+test(
+  "keeps a manually selected primary photo during cloud merge",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+    const incoming = plant({
+      photoId: "photo-3",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T14:00:00.000Z",
+    );
+
+    assert.deepEqual(
+      result.photoIds,
+      ["photo-1", "photo-2", "photo-3"],
+    );
+    assert.equal(
+      result.photoId,
+      "photo-3",
+    );
+  },
+);
+
+test(
+  "uses the first gallery photo as default primary",
+  () => {
+    const remote = plant({
+      photoIds: ["photo-1", "photo-2"],
+      photoId: null,
+    });
+    const incoming = plant({
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+      photoId: null,
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T14:00:00.000Z",
+    );
+
+    assert.equal(
+      result.photoId,
+      "photo-1",
+    );
+  },
+);
