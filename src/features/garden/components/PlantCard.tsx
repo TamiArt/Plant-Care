@@ -57,7 +57,7 @@ export function PlantCard({
         className="flex w-full items-stretch text-left"
       >
         <PlantPhotoGallery
-          photoIds={photoIds}
+          photoIds={primaryPhotoId ? [primaryPhotoId] : []}
           primaryPhotoId={primaryPhotoId}
           catalogPlant={catalogPlant}
           enableViewer={false}
