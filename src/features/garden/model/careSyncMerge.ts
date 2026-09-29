@@ -52,8 +52,11 @@ function normalizedPhotoIds(
       )
     : [];
 
-  if (ids.length === 0 && plant.photoId) {
-    ids.push(plant.photoId);
+  if (
+    plant.photoId &&
+    !ids.includes(plant.photoId)
+  ) {
+    ids.unshift(plant.photoId);
   }
 
   return [...new Set(ids)];
