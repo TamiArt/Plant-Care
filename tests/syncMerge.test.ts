@@ -220,3 +220,29 @@ test(
     );
   },
 );
+
+
+test(
+  "keeps every photo when a primary photo is missing from photoIds",
+  () => {
+    const result = mergeCareHistoryPlant(
+      plant({
+        photoId: null,
+        photoIds: ["photo-1", "photo-2"],
+      }),
+      plant({
+        photoId: "photo-3",
+        photoIds: ["photo-1", "photo-2"],
+        updatedAt: "2026-08-17T11:00:00.000Z",
+      }),
+      "2026-08-17T12:00:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, [
+      "photo-3",
+      "photo-1",
+      "photo-2",
+    ]);
+    assert.equal(result.photoId, "photo-3");
+  },
+);
