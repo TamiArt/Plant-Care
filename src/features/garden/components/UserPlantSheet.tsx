@@ -21,7 +21,7 @@ function DifficultyBadge({ d }: { d: Difficulty }) { const map = { easy: { label
 
 export function UserPlantSheet({
   up, display, catalogPlant, difficulty, onClose, onEdit, onRemove, onWater, onMist, onFertilize, onMoveLocation,
-  onAddNote, onDeleteNote, onToggleNoteItem, onAddReminder, onToggleReminder, onDeleteReminder,
+  onAddNote, onDeleteNote, onToggleNoteItem, onAddReminder, onToggleReminder, onDeleteReminder, onMakePrimaryPhoto,
 }: {
   up: UserPlant;
   display: PlantDisplay;
