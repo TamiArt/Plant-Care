@@ -35,6 +35,7 @@ import {
   migrateSyncMetadata,
 } from "../repository/migrateSyncMetadata";
 import { getPlantPhotoIds } from "../model/photos";
+import { buildPhotoGallery } from "../model/photoGallery";
 
 import {
   syncGarden,
@@ -487,99 +488,33 @@ export function useGarden() {
         } = photoOptions;
 
         if (gallery) {
-          const currentIds =
-            getPlantPhotoIds(
-              currentPlant,
+          const galleryResult =
+            buildPhotoGallery(
+              getPlantPhotoIds(
+                currentPlant,
+              ),
+              currentPlant.photoId,
+              gallery,
+              photoOptions.primaryPhotoIndex ?? null,
+              createId,
             );
-          const currentIdSet =
-            new Set(currentIds);
-          const retainedIds =
-            new Set<string>();
-          const removedIds: string[] = [];
-          const newPhotos: SavePlantPhotoInput[] = [];
-          const nextIds: string[] = [];
-
-          for (const slot of gallery) {
-            if (
-              slot.photoId &&
-              currentIdSet.has(slot.photoId)
-            ) {
-              nextIds.push(slot.photoId);
-              retainedIds.add(slot.photoId);
-              continue;
-            }
-
-            if (slot.photo) {
-              const photoId =
-                createId();
-
-              nextIds.push(photoId);
-
-              newPhotos.push({
-                id: photoId,
-                plantId:
-                  currentPlant.id,
-                ...slot.photo,
-              });
-            }
-          }
-
-          for (const photoId of currentIds) {
-            if (!retainedIds.has(photoId)) {
-              removedIds.push(photoId);
-            }
-          }
-
-          const normalizedIds = [
-            ...new Set(nextIds),
-          ];
 
           const requestedPrimary =
-            typeof changes.photoId ===
-              "string" &&
-            normalizedIds.includes(
+            typeof changes.photoId === "string" &&
+            galleryResult.photoIds.includes(
               changes.photoId,
             )
               ? changes.photoId
-              : null;
-
-          const primaryPhotoIndex =
-            photoOptions.primaryPhotoIndex ?? null;
-
-          const primaryFromIndex =
-            primaryPhotoIndex !== null &&
-            primaryPhotoIndex >= 0 &&
-            primaryPhotoIndex <
-              normalizedIds.length
-              ? normalizedIds[
-                  primaryPhotoIndex
-                ]
-              : null;
-
-          /*
-           * Explicit selection always wins. Otherwise keep the existing
-           * main photo. For legacy data without a valid main photo, the
-           * first photo in creation/addition order is the default.
-           */
-          const existingPrimary =
-            currentPlant.photoId &&
-            normalizedIds.includes(
-              currentPlant.photoId,
-            )
-              ? currentPlant.photoId
               : null;
 
           const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
             photoIds:
-              normalizedIds,
+              galleryResult.photoIds,
             photoId:
               requestedPrimary ??
-              primaryFromIndex ??
-              existingPrimary ??
-              normalizedIds[0] ??
-              null,
+              galleryResult.primaryPhotoId,
             updatedAt: nowIso(),
             deletedAt: null,
           };
