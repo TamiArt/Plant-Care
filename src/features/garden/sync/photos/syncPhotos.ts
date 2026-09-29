@@ -90,9 +90,10 @@ export async function uploadLocalPhotos(
    * not replaced by a cloud snapshot until every photo has been uploaded.
    */
   if (errors.length > 0) {
-    throw new AggregateError(
-      errors,
-      `Не удалось синхронизировать ${errors.length} фотографий.`,
+    throw new Error(
+      `Не удалось синхронизировать ${errors.length} фотографий: ${errors
+        .map(error => error.message)
+        .join("; ")}`,
     );
   }
 }
@@ -151,9 +152,10 @@ export async function downloadMissingPhotos(
   }
 
   if (errors.length > 0) {
-    throw new AggregateError(
-      errors,
-      `Не удалось скачать ${errors.length} фотографий.`,
+    throw new Error(
+      `Не удалось скачать ${errors.length} фотографий: ${errors
+        .map(error => error.message)
+        .join("; ")}`,
     );
   }
 }
