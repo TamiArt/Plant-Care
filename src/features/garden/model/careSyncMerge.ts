@@ -85,7 +85,7 @@ function mergePhotoGallery(
       : remote.photoId &&
           mergedIds.includes(remote.photoId)
         ? remote.photoId
-        : mergedIds.at(-1) ?? null;
+        : mergedIds[0] ?? null;
 
   return {
     photoIds: mergedIds,
