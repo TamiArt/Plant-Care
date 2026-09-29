@@ -43,15 +43,20 @@ export function UserPlantSheet({
   onMakePrimaryPhoto: (photoId: string) => void;
 }) {
   const status = getWateringStatus(up);
+  const wateringHistory = Array.isArray(up.wateringHistory) ? up.wateringHistory : [];
+  const mistingHistory = Array.isArray(up.mistingHistory) ? up.mistingHistory : [];
+  const fertilizingHistory = Array.isArray(up.fertilizingHistory) ? up.fertilizingHistory : [];
+  const notes = Array.isArray(up.notes) ? up.notes : [];
+  const reminders = Array.isArray(up.reminders) ? up.reminders : [];
   const [activeTab, setActiveTab] = useState<PlantTab>("care");
   const [noteText, setNoteText] = useState("");
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState(todayStr());
   const mistingEnabled = isMistingEnabled(up);
-  const mistToday = isMistedToday(up.mistingHistory);
-  const fertToday = up.fertilizingHistory[up.fertilizingHistory.length - 1] === todayStr();
-  const lastFert = up.fertilizingHistory[up.fertilizingHistory.length - 1];
+  const mistToday = isMistedToday(mistingHistory);
+  const fertToday = fertilizingHistory[fertilizingHistory.length - 1] === todayStr();
+  const lastFert = fertilizingHistory[fertilizingHistory.length - 1];
   const fertDaysUntil = up.fertilizingInterval > 0 && lastFert
     ? up.fertilizingInterval - daysSince(lastFert)
     : null;
@@ -134,8 +139,8 @@ export function UserPlantSheet({
             <div className="flex bg-muted rounded-2xl p-1 gap-1 mb-4">
               {([
                 { id: "care" as PlantTab, icon: <Droplets size={13} />, label: "Уход" },
-                { id: "notes" as PlantTab, icon: <StickyNote size={13} />, label: `Заметки${up.notes.length ? ` (${up.notes.length})` : ""}` },
-                { id: "reminders" as PlantTab, icon: <Bell size={13} />, label: `Напомин.${up.reminders.filter(r => !r.done).length ? ` (${up.reminders.filter(r => !r.done).length})` : ""}` },
+                { id: "notes" as PlantTab, icon: <StickyNote size={13} />, label: `Заметки${notes.length ? ` (${notes.length})` : ""}` },
+                { id: "reminders" as PlantTab, icon: <Bell size={13} />, label: `Напомин.${reminders.filter(r => !r.done).length ? ` (${reminders.filter(r => !r.done).length})` : ""}` },
               ]).map(t => (
                 <button key={t.id} onClick={() => setActiveTab(t.id)}
                   className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-medium transition-all ${activeTab === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
@@ -147,7 +152,7 @@ export function UserPlantSheet({
             {activeTab === "care" && (
               <div className="space-y-4 pb-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-secondary rounded-2xl p-3"><p className="text-xs text-muted-foreground mb-1">Поливов</p><p className="text-2xl font-bold text-foreground">{up.wateringHistory.length}</p></div>
+                  <div className="bg-secondary rounded-2xl p-3"><p className="text-xs text-muted-foreground mb-1">Поливов</p><p className="text-2xl font-bold text-foreground">{wateringHistory.length}</p></div>
                   <div className="bg-secondary rounded-2xl p-3"><p className="text-xs text-muted-foreground mb-1">Добавлено</p><p className="text-sm font-semibold text-foreground">{formatDate(up.addedAt)}</p></div>
                 </div>
 
@@ -165,8 +170,8 @@ export function UserPlantSheet({
                       <span className={`text-xs font-medium ${mistToday ? "text-sky-600" : "text-muted-foreground"}`}>{mistToday ? "Опрыснуто сегодня ✓" : "Сегодня ещё не опрыскивали"}</span>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {up.mistingHistory.length === 0 ? <p className="text-xs text-muted-foreground">Опрыскиваний пока нет</p> : (
-                        [...up.mistingHistory].reverse().slice(0, 6).map((date, index) => <span key={`${date}-${index}`} className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full">💨 {formatDate(date)}</span>)
+                      {mistingHistory.length === 0 ? <p className="text-xs text-muted-foreground">Опрыскиваний пока нет</p> : (
+                        [...mistingHistory].reverse().slice(0, 6).map((date, index) => <span key={`${date}-${index}`} className="text-xs bg-sky-100 text-sky-700 px-2.5 py-1 rounded-full">💨 {formatDate(date)}</span>)
                       )}
                     </div>
                     <button onClick={onMist} disabled={mistToday}
@@ -182,8 +187,8 @@ export function UserPlantSheet({
                     {fertDaysUntil !== null && <span className={`text-xs font-medium ${fertOverdue ? "text-amber-600" : "text-muted-foreground"}`}>{fertOverdue ? `Просрочено ${Math.abs(fertDaysUntil)} дн.` : fertDaysUntil === 0 ? "Сегодня" : `Через ${fertDaysUntil} дн.`}</span>}
                   </div>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {up.fertilizingHistory.length === 0 ? <p className="text-xs text-muted-foreground">Ещё не удобрялось</p> : (
-                      [...up.fertilizingHistory].reverse().slice(0, 6).map((d, i) => <span key={`${d}-${i}`} className="text-xs bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full">🌱 {formatDate(d)}</span>)
+                    {fertilizingHistory.length === 0 ? <p className="text-xs text-muted-foreground">Ещё не удобрялось</p> : (
+                      [...fertilizingHistory].reverse().slice(0, 6).map((d, i) => <span key={`${d}-${i}`} className="text-xs bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full">🌱 {formatDate(d)}</span>)
                     )}
                   </div>
                   <button onClick={onFertilize} disabled={fertToday}
@@ -192,9 +197,9 @@ export function UserPlantSheet({
                   </button>
                 </div>
 
-                {up.wateringHistory.length > 0 && (
+                {wateringHistory.length > 0 && (
                   <div><p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">История полива</p><div className="flex flex-wrap gap-2">
-                    {[...up.wateringHistory].reverse().slice(0, 8).map((d, i) => <span key={`${d}-${i}`} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full">💧 {formatDate(d)}</span>)}
+                    {[...wateringHistory].reverse().slice(0, 8).map((d, i) => <span key={`${d}-${i}`} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full">💧 {formatDate(d)}</span>)}
                   </div></div>
                 )}
 
@@ -216,10 +221,10 @@ export function UserPlantSheet({
                     className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-40 flex items-center justify-center gap-1.5"><Plus size={13} /> Добавить заметку</button>
                 </div>
 
-                {up.notes.length === 0 ? (
+                {notes.length === 0 ? (
                   <div className="text-center py-10"><StickyNote size={32} className="mx-auto text-muted-foreground mb-2 opacity-40" /><p className="text-sm text-muted-foreground">Нет заметок. Добавьте первую!</p></div>
                 ) : (
-                  [...up.notes].reverse().map(note => (
+                  [...notes].reverse().map(note => (
                     <div key={note.id} className="bg-card border border-border rounded-2xl p-3.5 relative group">
                       <div className="flex items-start justify-between gap-2 mb-1"><p className="text-[10px] text-muted-foreground">{formatDate(note.createdAt)}</p><button onClick={() => onDeleteNote(note.id)} className="opacity-50 hover:opacity-100 transition-opacity"><Trash2 size={12} className="text-red-400" /></button></div>
                       <NoteContent content={note.content} onToggleChecklist={lineIndex => onToggleNoteItem(note.id, lineIndex)} />
@@ -239,10 +244,10 @@ export function UserPlantSheet({
                     className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-40 flex items-center justify-center gap-1.5"><Bell size={13} /> Добавить напоминание</button>
                 </div>
 
-                {up.reminders.length === 0 ? (
+                {reminders.length === 0 ? (
                   <div className="text-center py-10"><Bell size={32} className="mx-auto text-muted-foreground mb-2 opacity-40" /><p className="text-sm text-muted-foreground">Нет напоминаний</p></div>
                 ) : (
-                  [...up.reminders].sort((a, b) => a.date.localeCompare(b.date)).map(r => {
+                  [...reminders].sort((a, b) => a.date.localeCompare(b.date)).map(r => {
                     const isPast = r.date < todayStr();
                     return (
                       <div key={r.id} className={`bg-card border rounded-2xl p-3.5 flex items-start gap-3 ${r.done ? "border-border opacity-60" : isPast ? "border-red-200 bg-red-50/30" : "border-border"}`}>
