@@ -522,8 +522,12 @@ export function useGarden() {
           return execute(async () => {
             await savePlantPhotoGallery(
               nextPlant,
-              newPhotos,
-              removedIds,
+              galleryResult.newPhotos.map(item => ({
+                id: item.id,
+                plantId: currentPlant.id,
+                ...item.photo,
+              })),
+              galleryResult.removedPhotoIds,
             );
 
             setPlants(current =>
