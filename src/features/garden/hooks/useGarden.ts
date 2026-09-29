@@ -556,6 +556,19 @@ export function useGarden() {
                 ]
               : null;
 
+          /*
+           * Explicit selection always wins. Otherwise keep the existing
+           * main photo. For legacy data without a valid main photo, the
+           * first photo in creation/addition order is the default.
+           */
+          const existingPrimary =
+            currentPlant.photoId &&
+            normalizedIds.includes(
+              currentPlant.photoId,
+            )
+              ? currentPlant.photoId
+              : null;
+
           const nextPlant: UserPlant = {
             ...currentPlant,
             ...changes,
@@ -564,7 +577,8 @@ export function useGarden() {
             photoId:
               requestedPrimary ??
               primaryFromIndex ??
-              normalizedIds.at(-1) ??
+              existingPrimary ??
+              normalizedIds[0] ??
               null,
             updatedAt: nowIso(),
             deletedAt: null,
