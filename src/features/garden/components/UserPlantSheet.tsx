@@ -43,11 +43,11 @@ export function UserPlantSheet({
   onMakePrimaryPhoto: (photoId: string) => void;
 }) {
   const status = getWateringStatus(up);
-  const wateringHistory = Array.isArray(wateringHistory) ? wateringHistory : [];
-  const mistingHistory = Array.isArray(mistingHistory) ? mistingHistory : [];
-  const fertilizingHistory = Array.isArray(fertilizingHistory) ? fertilizingHistory : [];
-  const notes = Array.isArray(notes) ? notes : [];
-  const reminders = Array.isArray(reminders) ? reminders : [];
+  const wateringHistory = Array.isArray(up.wateringHistory) ? up.wateringHistory : [];
+  const mistingHistory = Array.isArray(up.mistingHistory) ? up.mistingHistory : [];
+  const fertilizingHistory = Array.isArray(up.fertilizingHistory) ? up.fertilizingHistory : [];
+  const notes = Array.isArray(up.notes) ? up.notes : [];
+  const reminders = Array.isArray(up.reminders) ? up.reminders : [];
   const [activeTab, setActiveTab] = useState<PlantTab>("care");
   const [noteText, setNoteText] = useState("");
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
