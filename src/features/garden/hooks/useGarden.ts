@@ -545,8 +545,30 @@ export function useGarden() {
             ? createId()
             : removePhoto
               ? null
-              : currentPlant
-                  .photoId;
+              : currentPlant.photoId;
+
+        const currentPhotoIds =
+          getPlantPhotoIds(
+            currentPlant,
+          );
+
+        const nextPhotoIds =
+          photo
+            ? [
+                ...currentPhotoIds.filter(
+                  id =>
+                    id !==
+                    currentPlant.photoId,
+                ),
+                nextPhotoId!,
+              ]
+            : removePhoto
+              ? currentPhotoIds.filter(
+                  id =>
+                    id !==
+                    currentPlant.photoId,
+                )
+              : currentPhotoIds;
 
         const nextPlant:
           UserPlant = {
@@ -559,6 +581,9 @@ export function useGarden() {
 
           photoId:
             nextPhotoId,
+
+          photoIds:
+            nextPhotoIds,
 
           createdAt:
             currentPlant
