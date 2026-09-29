@@ -29,7 +29,7 @@ export function getPrimaryPlantPhotoId(
     return plant.photoId;
   }
 
-  return ids.at(-1) ?? null;
+  return ids[0] ?? null;
 }
 
 // Backward-compatible alias for existing callers.
