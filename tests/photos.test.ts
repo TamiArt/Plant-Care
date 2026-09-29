@@ -50,13 +50,13 @@ test("uses the selected photo as the primary photo", () => {
   );
 });
 
-test("falls back to the latest photo for legacy records", () => {
+test("uses the first photo as the default primary", () => {
   assert.equal(
     getPrimaryPlantPhotoId({
       photoId: null,
       photoIds: ["one", "two"],
     }),
-    "two",
+    "one",
   );
 });
 
