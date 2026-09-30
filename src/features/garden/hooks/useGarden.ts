@@ -596,6 +596,19 @@ export function useGarden() {
           photoIds:
             nextPhotoIds,
 
+          deletedPhotoIds: [
+            ...new Set([
+              ...(currentPlant.deletedPhotoIds ?? []),
+              ...(photo || removePhoto
+                ? [currentPlant.photoId]
+                : []),
+            ]),
+          ].filter(
+            (photoId): photoId is string =>
+              typeof photoId === "string" &&
+              !nextPhotoIds.includes(photoId),
+          ),
+
           createdAt:
             currentPlant
               .createdAt,
