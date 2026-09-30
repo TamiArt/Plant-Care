@@ -303,6 +303,7 @@ export async function getPlantsForUser(db: D1Database, userId: string): Promise<
     SELECT
       id, catalog_id, custom_name, custom_latin_name,
       custom_description, custom_emoji, nickname, photo_id, photo_ids,
+      deleted_photo_ids,
       watering_interval, watering_history, misting_enabled, misting_history,
       fertilizing_interval, fertilizing_history, supplemental_light,
       added_at, location, notes, reminders, external_taxon,
