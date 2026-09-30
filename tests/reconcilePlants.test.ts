@@ -206,3 +206,25 @@ test("preserves a primary photo selected locally during sync", () => {
   ]);
   assert.equal(result.photoId, "photo-2");
 });
+
+test("does not resurrect a photo deleted locally when the remote still has it", () => {
+  const local = plant({
+    photoId: "photo-2",
+    photoIds: ["photo-2", "photo-3"],
+    deletedPhotoIds: ["photo-1"],
+  });
+  const remote = plant({
+    photoId: "photo-1",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.deepEqual(result.photoIds, [
+    "photo-2",
+    "photo-3",
+  ]);
+  assert.deepEqual(result.deletedPhotoIds, [
+    "photo-1",
+  ]);
+});
