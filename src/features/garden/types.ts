@@ -56,6 +56,9 @@ export interface UserPlant {
   /** Полная галерея фотографий растения в порядке добавления. */
   photoIds?: string[];
 
+  /** Photo IDs intentionally removed locally; synced as tombstones. */
+  deletedPhotoIds?: string[];
+
   wateringInterval: number;
   wateringHistory: string[];
 
