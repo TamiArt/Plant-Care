@@ -70,7 +70,8 @@ export async function getPhotoMetadata(
           height,
           byte_size,
           created_at,
-          updated_at
+          updated_at,
+          deleted_at
 
         FROM plant_photos
 
@@ -108,13 +109,15 @@ export async function getPhoto(
           height,
           byte_size,
           created_at,
-          updated_at
+          updated_at,
+          deleted_at
 
         FROM plant_photos
 
         WHERE
           id = ?1
           AND user_id = ?2
+          AND deleted_at IS NULL
 
         LIMIT 1
       `,
@@ -199,7 +202,8 @@ export async function savePhoto(
           ?7,
           ?8,
           ?9,
-          ?10
+          ?10,
+          NULL
         )
 
         ON CONFLICT(id)
@@ -223,7 +227,10 @@ export async function savePhoto(
             excluded.byte_size,
 
           updated_at =
-            excluded.updated_at
+            excluded.updated_at,
+
+          deleted_at =
+            NULL
 
         WHERE
           plant_photos.user_id =
