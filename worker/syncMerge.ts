@@ -7,6 +7,7 @@ export interface CareHistoryPlant {
   fertilizingHistory: string[];
   photoId?: string | null;
   photoIds?: string[];
+  deletedPhotoIds?: string[];
   [key: string]: unknown;
 }
 
@@ -47,10 +48,15 @@ function latestTimestamp(
 function normalizedPhotoIds(
   plant: CareHistoryPlant,
 ): string[] {
+  const deleted = new Set(
+    Array.isArray(plant.deletedPhotoIds)
+      ? plant.deletedPhotoIds.filter(id => typeof id === "string" && id.length > 0)
+      : [],
+  );
   const ids = Array.isArray(plant.photoIds)
     ? plant.photoIds.filter(
         (id): id is string =>
-          typeof id === "string" && id.length > 0,
+          typeof id === "string" && id.length > 0 && !deleted.has(id),
       )
     : [];
 
@@ -79,7 +85,11 @@ function normalizedPhotoIds(
 function mergePhotoGallery<T extends CareHistoryPlant>(
   incoming: T,
   remote: T,
-): Pick<T, "photoId" | "photoIds"> {
+): Pick<T, "photoId" | "photoIds" | "deletedPhotoIds"> {
+  const deletedPhotoIds = [...new Set([
+    ...(Array.isArray(remote.deletedPhotoIds) ? remote.deletedPhotoIds : []),
+    ...(Array.isArray(incoming.deletedPhotoIds) ? incoming.deletedPhotoIds : []),
+  ])].filter(id => typeof id === "string" && id.length > 0);
   const incomingIds = normalizedPhotoIds(incoming);
   const remoteIds = normalizedPhotoIds(remote);
 
@@ -101,6 +111,7 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
 
   return {
     photoIds: mergedIds,
+    deletedPhotoIds,
     photoId: primaryPhotoId,
   } as Pick<T, "photoId" | "photoIds">;
 }
