@@ -190,7 +190,8 @@ export async function savePhoto(
           byte_size,
 
           created_at,
-          updated_at
+          updated_at,
+          deleted_at
         )
         VALUES (
           ?1,
