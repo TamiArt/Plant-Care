@@ -298,3 +298,65 @@ test(
     assert.equal(result.photoId, "photo-3");
   },
 );
+
+test(
+  "does not resurrect a photo intentionally deleted on one device",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+      deletedPhotoIds: [],
+    });
+    const incoming = plant({
+      photoId: "photo-2",
+      photoIds: ["photo-2", "photo-3"],
+      deletedPhotoIds: ["photo-1"],
+      updatedAt: "2026-08-18T10:00:00.000Z",
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-18T10:01:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, [
+      "photo-2",
+      "photo-3",
+    ]);
+    assert.deepEqual(result.deletedPhotoIds, [
+      "photo-1",
+    ]);
+    assert.equal(result.photoId, "photo-2");
+  },
+);
+
+test(
+  "propagates photo deletion tombstones in both directions",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2"],
+      deletedPhotoIds: ["photo-3"],
+    });
+    const incoming = plant({
+      photoId: "photo-2",
+      photoIds: ["photo-2", "photo-3"],
+      deletedPhotoIds: ["photo-1"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-18T10:01:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, [
+      "photo-2",
+    ]);
+    assert.deepEqual(
+      result.deletedPhotoIds,
+      ["photo-3", "photo-1"],
+    );
+  },
+);
