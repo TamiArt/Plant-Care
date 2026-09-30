@@ -51,12 +51,14 @@ function isIsoDate(
 function normalizePhotoGallery(
   photoId: string | null,
   value: unknown,
-): { photoId: string | null; photoIds: string[] } {
+  deletedValue: unknown = [],
+): { photoId: string | null; photoIds: string[]; deletedPhotoIds: string[] } {
+  const deletedPhotoIds = Array.isArray(deletedValue) ? [...new Set(deletedValue.filter((item): item is string => typeof item === "string" && item.length > 0))] : [];
   const ids = Array.isArray(value)
     ? value.filter(
         (item): item is string =>
           typeof item === "string" &&
-          item.length > 0,
+          item.length > 0 && !deletedPhotoIds.includes(item),
       )
     : [];
 
@@ -73,6 +75,7 @@ function normalizePhotoGallery(
 
   return {
     photoIds: uniqueIds,
+    deletedPhotoIds,
     photoId:
       photoId &&
       uniqueIds.includes(photoId)
@@ -151,6 +154,7 @@ function normalizeRemotePlant(
         ? value.photoId
         : null,
       value.photoIds,
+      value.deletedPhotoIds,
     ),
 
     wateringInterval:
