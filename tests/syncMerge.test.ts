@@ -137,7 +137,6 @@ test(
   },
 );
 
-
 test(
   "keeps the complete photo gallery during cloud merge",
   () => {
@@ -163,6 +162,60 @@ test(
     assert.equal(
       result.photoId,
       "photo-1",
+    );
+  },
+);
+
+test(
+  "keeps remote-only photos when the local device has an older gallery",
+  () => {
+    const remote = plant({
+      updatedAt: "2026-08-17T14:00:00.000Z",
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+    const incoming = plant({
+      updatedAt: "2026-08-17T15:00:00.000Z",
+      photoId: "photo-1",
+      photoIds: ["photo-1"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T15:01:00.000Z",
+    );
+
+    assert.deepEqual(
+      result.photoIds,
+      ["photo-1", "photo-2", "photo-3"],
+    );
+  },
+);
+
+test(
+  "keeps local-only photos when the remote device has an older gallery",
+  () => {
+    const remote = plant({
+      updatedAt: "2026-08-17T15:00:00.000Z",
+      photoId: "photo-1",
+      photoIds: ["photo-1"],
+    });
+    const incoming = plant({
+      updatedAt: "2026-08-17T14:00:00.000Z",
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T15:01:00.000Z",
+    );
+
+    assert.deepEqual(
+      result.photoIds,
+      ["photo-1", "photo-2", "photo-3"],
     );
   },
 );
@@ -220,7 +273,6 @@ test(
     );
   },
 );
-
 
 test(
   "keeps every photo when a primary photo is missing from photoIds",
