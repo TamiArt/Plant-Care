@@ -182,6 +182,8 @@ function sanitizeImportedPlant(
             .photoId
         : null,
 
+    deletedPhotoIds: [],
+
     createdAt:
       createdAtFromPlant(
         withoutLegacyPhoto,
@@ -515,6 +517,15 @@ export function useGarden() {
             photoId:
               requestedPrimary ??
               galleryResult.primaryPhotoId,
+            deletedPhotoIds: [
+              ...new Set([
+                ...(currentPlant.deletedPhotoIds ?? []),
+                ...galleryResult.removedPhotoIds,
+              ]),
+            ].filter(
+              photoId =>
+                galleryResult.photoIds.includes(photoId),
+            ),
             updatedAt: nowIso(),
             deletedAt: null,
           };
@@ -584,6 +595,19 @@ export function useGarden() {
 
           photoIds:
             nextPhotoIds,
+
+          deletedPhotoIds: [
+            ...new Set([
+              ...(currentPlant.deletedPhotoIds ?? []),
+              ...(photo || removePhoto
+                ? [currentPlant.photoId]
+                : []),
+            ]),
+          ].filter(
+            (photoId): photoId is string =>
+              typeof photoId === "string" &&
+              !nextPhotoIds.includes(photoId),
+          ),
 
           createdAt:
             currentPlant

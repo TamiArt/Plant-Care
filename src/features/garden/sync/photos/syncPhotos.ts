@@ -12,6 +12,9 @@ import {
   compressPhotoForCloud,
 } from "../../services/compressPhotoForCloud";
 import { getPlantPhotoIds } from "../../model/photos";
+import {
+  findMissingPlantPhotoIds,
+} from "../../model/photoSyncIntegrity";
 
 import {
   downloadPhotoFromCloud,
@@ -117,6 +120,13 @@ export async function downloadMissingPhotos(
         await getPlantPhoto(photoId);
 
       if (existing) {
+        if (existing.plantId !== plant.id) {
+          errors.push(
+            new Error(
+              `Фотография ${photoId} принадлежит другому растению.`,
+            ),
+          );
+        }
         continue;
       }
 
@@ -156,6 +166,25 @@ export async function downloadMissingPhotos(
       `Не удалось скачать ${errors.length} фотографий: ${errors
         .map(error => error.message)
         .join("; ")}`,
+    );
+  }
+
+  /*
+   * Sync is considered successful only when every photo referenced by the
+   * merged plant metadata is physically present in IndexedDB. This prevents
+   * a metadata-only sync from making the gallery appear empty later.
+   */
+  const localPhotos =
+    await getAllPlantPhotos();
+  const missingPhotoIds =
+    findMissingPlantPhotoIds(
+      plants,
+      localPhotos.map(photo => photo.id),
+    );
+
+  if (missingPhotoIds.length > 0) {
+    throw new Error(
+      `Синхронизация завершена без ${missingPhotoIds.length} фотографий: ${missingPhotoIds.join(", ")}.`,
     );
   }
 }

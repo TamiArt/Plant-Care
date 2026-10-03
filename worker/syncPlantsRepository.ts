@@ -13,6 +13,7 @@ export interface SyncPlant {
   nickname: string;
   photoId: string | null;
   photoIds: string[];
+  deletedPhotoIds: string[];
   wateringInterval: number;
   wateringHistory: string[];
   mistingEnabled: boolean;
@@ -40,6 +41,7 @@ interface PlantRow {
   nickname: string;
   photo_id: string | null;
   photo_ids: string;
+  deleted_photo_ids: string;
   watering_interval: number;
   watering_history: string;
   misting_enabled: number;
@@ -97,11 +99,15 @@ function normalizeLight(value: unknown): SupplementalLightSchedule | null {
 function normalizePhotoGallery(
   photoId: string | null,
   value: unknown,
-): { photoId: string | null; photoIds: string[] } {
+  deletedValue: unknown,
+): { photoId: string | null; photoIds: string[]; deletedPhotoIds: string[] } {
+  const deletedPhotoIds = [
+    ...new Set(strings(deletedValue).filter(id => id.length > 0)),
+  ];
   const ids = [
     ...new Set(
       strings(value).filter(
-        id => id.length > 0,
+        id => id.length > 0 && !deletedPhotoIds.includes(id),
       ),
     ),
   ];
@@ -115,6 +121,7 @@ function normalizePhotoGallery(
 
   return {
     photoIds: ids,
+    deletedPhotoIds,
     photoId:
       photoId &&
       ids.includes(photoId)
@@ -139,6 +146,7 @@ export function normalizeSyncPlant(value: unknown): SyncPlant {
     normalizePhotoGallery(
       photoId,
       value.photoIds,
+      value.deletedPhotoIds,
     );
 
   return {
@@ -151,6 +159,7 @@ export function normalizeSyncPlant(value: unknown): SyncPlant {
     nickname: value.nickname,
     photoId: gallery.photoId,
     photoIds: gallery.photoIds,
+    deletedPhotoIds: gallery.deletedPhotoIds,
     wateringInterval: numberOr(value.wateringInterval, 7),
     wateringHistory: strings(value.wateringHistory),
     mistingEnabled: value.mistingEnabled !== false,
@@ -212,6 +221,7 @@ function rowToPlant(row: PlantRow): SyncPlant {
     nickname: row.nickname,
     photoId: row.photo_id,
     photoIds: stringArray(row.photo_ids),
+    deletedPhotoIds: stringArray(row.deleted_photo_ids),
     wateringInterval: row.watering_interval,
     wateringHistory: stringArray(row.watering_history),
     mistingEnabled: row.misting_enabled !== 0,
@@ -235,12 +245,13 @@ export function createPlantUpsert(db: D1Database, userId: string, plant: SyncPla
     INSERT INTO plants (
       id, user_id, catalog_id, custom_name, custom_latin_name,
       custom_description, custom_emoji, nickname, photo_id, photo_ids,
+      deleted_photo_ids,
       watering_interval, watering_history, misting_enabled, misting_history,
       fertilizing_interval, fertilizing_history, supplemental_light,
       added_at, location, notes, reminders, external_taxon,
       created_at, updated_at, deleted_at
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?
     )
@@ -253,6 +264,7 @@ export function createPlantUpsert(db: D1Database, userId: string, plant: SyncPla
       nickname = excluded.nickname,
       photo_id = excluded.photo_id,
       photo_ids = excluded.photo_ids,
+      deleted_photo_ids = excluded.deleted_photo_ids,
       watering_interval = excluded.watering_interval,
       watering_history = excluded.watering_history,
       misting_enabled = excluded.misting_enabled,
@@ -274,7 +286,7 @@ export function createPlantUpsert(db: D1Database, userId: string, plant: SyncPla
     plant.id, userId, plant.catalogId, plant.customName ?? null,
     plant.customLatinName ?? null, plant.customDescription ?? null,
     plant.customEmoji ?? null, plant.nickname, plant.photoId,
-    JSON.stringify(plant.photoIds), plant.wateringInterval,
+    JSON.stringify(plant.photoIds), JSON.stringify(plant.deletedPhotoIds), plant.wateringInterval,
     JSON.stringify(plant.wateringHistory), plant.mistingEnabled ? 1 : 0,
     JSON.stringify(plant.mistingHistory), plant.fertilizingInterval,
     JSON.stringify(plant.fertilizingHistory),
@@ -291,6 +303,7 @@ export async function getPlantsForUser(db: D1Database, userId: string): Promise<
     SELECT
       id, catalog_id, custom_name, custom_latin_name,
       custom_description, custom_emoji, nickname, photo_id, photo_ids,
+      deleted_photo_ids,
       watering_interval, watering_history, misting_enabled, misting_history,
       fertilizing_interval, fertilizing_history, supplemental_light,
       added_at, location, notes, reminders, external_taxon,

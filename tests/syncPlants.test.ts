@@ -65,3 +65,19 @@ test("server normalization uses the first gallery photo when no primary is selec
 
   assert.equal(result.photoId, "photo-1");
 });
+
+test("server normalization excludes tombstoned photo ids from active gallery", () => {
+  const result = normalizeSyncPlant({
+    id: "plant-1",
+    nickname: "Монстера",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    updatedAt: "2026-08-17T10:00:00.000Z",
+    photoId: "photo-2",
+    photoIds: ["photo-1", "photo-2", "photo-3"],
+    deletedPhotoIds: ["photo-1", "photo-3"],
+  });
+
+  assert.deepEqual(result.photoIds, ["photo-2"]);
+  assert.deepEqual(result.deletedPhotoIds, ["photo-1", "photo-3"]);
+  assert.equal(result.photoId, "photo-2");
+});

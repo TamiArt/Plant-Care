@@ -45,10 +45,11 @@ function mergedTimestamp(
 function normalizedPhotoIds(
   plant: UserPlant,
 ): string[] {
+  const deleted = new Set(plant.deletedPhotoIds ?? []);
   const ids = Array.isArray(plant.photoIds)
     ? plant.photoIds.filter(
         (id): id is string =>
-          typeof id === "string" && id.length > 0,
+          typeof id === "string" && id.length > 0 && !deleted.has(id),
       )
     : [];
 
@@ -71,7 +72,8 @@ function normalizedPhotoIds(
 function mergePhotoGallery(
   local: UserPlant,
   remote: UserPlant,
-): Pick<UserPlant, "photoId" | "photoIds"> {
+): Pick<UserPlant, "photoId" | "photoIds" | "deletedPhotoIds"> {
+  const deletedPhotoIds = [...new Set([...(local.deletedPhotoIds ?? []), ...(remote.deletedPhotoIds ?? [])])];
   const localIds = normalizedPhotoIds(local);
   const remoteIds = normalizedPhotoIds(remote);
   const mergedIds = [
@@ -92,6 +94,7 @@ function mergePhotoGallery(
 
   return {
     photoIds: mergedIds,
+    deletedPhotoIds,
     photoId: primaryPhotoId,
   };}
 
