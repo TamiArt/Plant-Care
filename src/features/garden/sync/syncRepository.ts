@@ -64,7 +64,7 @@ function normalizePhotoGallery(
 
   const uniqueIds = [
     ...new Set(ids),
-  ];
+  ].slice(0, 3);
 
   if (
     photoId &&
