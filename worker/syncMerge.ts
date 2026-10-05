@@ -1,4 +1,4 @@
-import { MAX_PLANT_PHOTOS } from "../src/features/garden/model/photoGallery";
+const MAX_PLANT_PHOTOS = 3;
 
 export interface CareHistoryPlant {
   id?: string;
