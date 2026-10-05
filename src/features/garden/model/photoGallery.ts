@@ -1,3 +1,5 @@
+export const MAX_PLANT_PHOTOS = 3;
+
 export interface PhotoGallerySlot<TPhoto> {
   photoId?: string;
   photo?: TPhoto;
@@ -13,9 +15,9 @@ export interface PhotoGalleryResult<TPhoto> {
 /**
  * Builds the complete desired gallery from the editor state.
  *
- * Existing photo IDs are retained, new photos receive new IDs, and
- * anything omitted by the editor is considered intentionally removed.
- * No artificial gallery-size limit is applied.
+ * A plant may have at most three photos. Existing photos are retained
+ * unless the editor explicitly removes them; adding a photo never
+ * replaces an existing photo implicitly.
  */
 export function buildPhotoGallery<TPhoto>(
   currentPhotoIds: string[],
@@ -32,7 +34,8 @@ export function buildPhotoGallery<TPhoto>(
           id.length > 0,
       ),
     ),
-  ];
+  ].slice(0, MAX_PLANT_PHOTOS);
+
   const currentIdSet = new Set(currentIds);
   const retainedIds = new Set<string>();
   const nextIds: string[] = [];
@@ -42,6 +45,10 @@ export function buildPhotoGallery<TPhoto>(
   }> = [];
 
   for (const slot of slots) {
+    if (nextIds.length >= MAX_PLANT_PHOTOS) {
+      break;
+    }
+
     if (
       slot.photoId &&
       currentIdSet.has(slot.photoId)
@@ -56,6 +63,7 @@ export function buildPhotoGallery<TPhoto>(
     if (slot.photo) {
       const id = createPhotoId();
       nextIds.push(id);
+      retainedIds.add(id);
       newPhotos.push({
         id,
         photo: slot.photo,
@@ -69,7 +77,7 @@ export function buildPhotoGallery<TPhoto>(
 
   const normalizedIds = [
     ...new Set(nextIds),
-  ];
+  ].slice(0, MAX_PLANT_PHOTOS);
 
   const selectedByIndex =
     primaryPhotoIndex !== null &&
@@ -93,7 +101,9 @@ export function buildPhotoGallery<TPhoto>(
       existingPrimary ??
       normalizedIds[0] ??
       null,
-    newPhotos,
+    newPhotos: newPhotos.filter(
+      item => normalizedIds.includes(item.id),
+    ),
     removedPhotoIds,
   };
 }
