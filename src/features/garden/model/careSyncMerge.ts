@@ -1,6 +1,7 @@
 import type {
   UserPlant,
 } from "../types";
+import { MAX_PLANT_PHOTOS } from "./photoGallery";
 
 function mergeHistory(
   first: string[],
@@ -65,38 +66,65 @@ function normalizedPhotoIds(
 
 /**
  * Gallery metadata is merged independently from ordinary LWW fields.
- * Local photoIds have priority because the local photo Blob is the source
- * of truth for the current device until the cloud upload completes.
- * The merged gallery contains the complete photo history.
+ * The newer plant version has priority. The older side may contribute a
+ * photo only while the three-photo capacity is still available.
+ * This prevents an old snapshot from replacing the newer gallery or making
+ * the plant exceed its three-photo contract.
  */
 function mergePhotoGallery(
   local: UserPlant,
   remote: UserPlant,
 ): Pick<UserPlant, "photoId" | "photoIds" | "deletedPhotoIds"> {
-  const deletedPhotoIds = [...new Set([...(local.deletedPhotoIds ?? []), ...(remote.deletedPhotoIds ?? [])])];
-  const localIds = normalizedPhotoIds(local);
-  const remoteIds = normalizedPhotoIds(remote);
-  const mergedIds = [
-    ...localIds,
-    ...remoteIds.filter(
-      id => !localIds.includes(id),
-    ),
+  const deletedPhotoIds = [
+    ...new Set([
+      ...(local.deletedPhotoIds ?? []),
+      ...(remote.deletedPhotoIds ?? []),
+    ]),
   ];
 
-  const primaryPhotoId =
-    local.photoId &&
-    mergedIds.includes(local.photoId)
+  const localIds = normalizedPhotoIds(local);
+  const remoteIds = normalizedPhotoIds(remote);
+  const base =
+    local.updatedAt >= remote.updatedAt
+      ? localIds
+      : remoteIds;
+  const secondary =
+    local.updatedAt >= remote.updatedAt
+      ? remoteIds
+      : localIds;
+
+  const mergedIds = [
+    ...base,
+    ...secondary.filter(id => !base.includes(id)),
+  ]
+    .filter(id => !deletedPhotoIds.includes(id))
+    .slice(0, MAX_PLANT_PHOTOS);
+
+  const basePrimary =
+    local.updatedAt >= remote.updatedAt
       ? local.photoId
-      : remote.photoId &&
-          mergedIds.includes(remote.photoId)
-        ? remote.photoId
+      : remote.photoId;
+
+  const otherPrimary =
+    local.updatedAt >= remote.updatedAt
+      ? remote.photoId
+      : local.photoId;
+
+  const primaryPhotoId =
+    basePrimary &&
+    mergedIds.includes(basePrimary)
+      ? basePrimary
+      : otherPrimary &&
+          mergedIds.includes(otherPrimary)
+        ? otherPrimary
         : mergedIds[0] ?? null;
 
   return {
     photoIds: mergedIds,
     deletedPhotoIds,
     photoId: primaryPhotoId,
-  };}
+  };
+}
 
 /**
  * Обычные поля выбираются по LWW.

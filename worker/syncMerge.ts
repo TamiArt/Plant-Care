@@ -1,3 +1,5 @@
+const MAX_PLANT_PHOTOS = 3;
+
 export interface CareHistoryPlant {
   id?: string;
   nickname?: string;
@@ -75,45 +77,62 @@ function normalizedPhotoIds(
  * Photo gallery is merged independently from ordinary LWW fields.
  *
  * The incoming snapshot is the local snapshot sent by the device.
- * Every photo from both sides is retained; there is intentionally no
- * three-photo limit.
- *
- * photoId is the explicitly selected main photo when it is still present.
- * If neither side has a valid selection, the first photo in the merged
- * gallery remains the default main photo.
+ * The newer plant version has priority. The older side may contribute
+ * photos only while the three-photo capacity remains available.
+ * photoId follows the newer version whenever its selected photo is valid.
  */
 function mergePhotoGallery<T extends CareHistoryPlant>(
   incoming: T,
   remote: T,
 ): Pick<T, "photoId" | "photoIds" | "deletedPhotoIds"> {
-  const deletedPhotoIds = [...new Set([
-    ...(Array.isArray(remote.deletedPhotoIds) ? remote.deletedPhotoIds : []),
-    ...(Array.isArray(incoming.deletedPhotoIds) ? incoming.deletedPhotoIds : []),
-  ])].filter(id => typeof id === "string" && id.length > 0);
+  const deletedPhotoIds = [
+    ...new Set([
+      ...(Array.isArray(remote.deletedPhotoIds) ? remote.deletedPhotoIds : []),
+      ...(Array.isArray(incoming.deletedPhotoIds) ? incoming.deletedPhotoIds : []),
+    ]),
+  ].filter(id => typeof id === "string" && id.length > 0));
+
   const incomingIds = normalizedPhotoIds(incoming);
   const remoteIds = normalizedPhotoIds(remote);
+  const base =
+    incoming.updatedAt >= remote.updatedAt
+      ? incomingIds
+      : remoteIds;
+  const secondary =
+    incoming.updatedAt >= remote.updatedAt
+      ? remoteIds
+      : incomingIds;
 
   const mergedIds = [
-    ...incomingIds,
-    ...remoteIds.filter(
-      id => !incomingIds.includes(id),
-    ),
-  ];
+    ...base,
+    ...secondary.filter(id => !base.includes(id)),
+  ]
+    .filter(id => !deletedPhotoIds.includes(id))
+    .slice(0, MAX_PLANT_PHOTOS);
+
+  const basePrimary =
+    incoming.updatedAt >= remote.updatedAt
+      ? incoming.photoId
+      : remote.photoId;
+  const otherPrimary =
+    incoming.updatedAt >= remote.updatedAt
+      ? remote.photoId
+      : incoming.photoId;
 
   const primaryPhotoId =
-    incoming.photoId &&
-    mergedIds.includes(incoming.photoId)
-      ? incoming.photoId
-      : remote.photoId &&
-          mergedIds.includes(remote.photoId)
-        ? remote.photoId
+    basePrimary &&
+    mergedIds.includes(basePrimary)
+      ? basePrimary
+      : otherPrimary &&
+          mergedIds.includes(otherPrimary)
+        ? otherPrimary
         : mergedIds[0] ?? null;
 
   return {
     photoIds: mergedIds,
     deletedPhotoIds,
     photoId: primaryPhotoId,
-  } as Pick<T, "photoId" | "photoIds">;
+  } as Pick<T, "photoId" | "photoIds" | "deletedPhotoIds">;
 }
 
 /**

@@ -23,7 +23,7 @@ test("uses the legacy photo as a one-item gallery", () => {
   );
 });
 
-test("keeps every unique photo instead of truncating the gallery", () => {
+test("limits a plant gallery to three unique photos", () => {
   const plant = {
     photoId: "three",
     photoIds: [
@@ -37,7 +37,7 @@ test("keeps every unique photo instead of truncating the gallery", () => {
 
   assert.deepEqual(
     getPlantPhotoIds(plant),
-    ["one", "two", "three", "four"],
+    ["one", "two", "three",],
   );
 });
 
@@ -231,4 +231,39 @@ test("photo sync passes when every referenced blob is present", () => {
     ),
     [],
   );
+});
+
+
+test("tombstoned photos are never returned as active gallery photos", () => {
+  assert.deepEqual(
+    getPlantPhotoIds({
+      photoId: "photo-2",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+      deletedPhotoIds: ["photo-1", "photo-3"],
+    }),
+    ["photo-2"],
+  );
+});
+
+test("adding a fourth photo does not replace the existing three", () => {
+  const result = buildPhotoGallery(
+    ["photo-1", "photo-2", "photo-3"],
+    "photo-1",
+    [
+      { photoId: "photo-1" },
+      { photoId: "photo-2" },
+      { photoId: "photo-3" },
+      { photo: "photo-4-data" },
+    ],
+    null,
+    () => "photo-4",
+  );
+
+  assert.deepEqual(result.photoIds, [
+    "photo-1",
+    "photo-2",
+    "photo-3",
+  ]);
+  assert.deepEqual(result.newPhotos, []);
+  assert.deepEqual(result.removedPhotoIds, []);
 });

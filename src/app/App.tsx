@@ -84,6 +84,7 @@ export default function App() {
   const auth = useAuth();
   const {
     syncNow,
+    initialSyncReady,
   } = useGardenAutoSync({
     userId:
       auth.user?.id ??
@@ -92,8 +93,6 @@ export default function App() {
       auth.isLoading,
     gardenLoading:
       garden.isLoading,
-    plants:
-      garden.plants,
     syncWithCloud:
       garden.syncWithCloud,
   });
@@ -278,22 +277,33 @@ const {
   onUpdate={applyUpdate}
   closeInstall={closeInstall}
 />
+      {!initialSyncReady && !garden.isLoading && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/95 px-6 text-center backdrop-blur-sm">
+          <div className="max-w-xs">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm font-semibold text-foreground">Синхронизация данных…</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Получаем последнюю версию сада и фотографий перед началом работы.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
-        {tab === "home" && (
+        {initialSyncReady && tab === "home" && (
           <PlantsScreen
             location="home"
             plants={garden.plants}
             {...sharedScreenProps}
           />
         )}
-        {tab === "garden" && (
+        {initialSyncReady && tab === "garden" && (
           <PlantsScreen
             location="outdoor"
             plants={garden.plants}
             {...sharedScreenProps}
           />
         )}
-        {tab === "catalog" && (
+        {initialSyncReady && tab === "catalog" && (
           <CatalogScreen
             onSelect={(cp) => {
               setPendingPhoto(null);
@@ -301,10 +311,10 @@ const {
             }}
           />
         )}
-        {tab === "checklist" && (
+        {initialSyncReady && tab === "checklist" && (
           <ChecklistScreen />
         )}
-        {tab === "add" && (
+        {initialSyncReady && tab === "add" && (
           <AddScreen
             onSelectCatalog={(cp, photo) => {
               if (!requireAuthForAdd()) {
@@ -323,7 +333,7 @@ const {
           />
         )}
       </div>
-      <BottomNav
+      {initialSyncReady && <BottomNav
         active={tab}
         onChange={(nextTab) => {
           if (
@@ -336,8 +346,8 @@ const {
         }}
         homeCount={homeCount}
         gardenCount={gardenCount}
-      />
-      {!aiOpen && (
+      />}
+      {initialSyncReady && !aiOpen && (
         <button
           onClick={() => {
             if (liveDetail) {
@@ -368,7 +378,7 @@ const {
         </button>
       )}
       <AnimatePresence>
-        {catalogDetail && !addToGarden && (
+        {initialSyncReady && catalogDetail && !addToGarden && (
           <CatalogDetailSheet
             key="cat-detail"
             cp={catalogDetail}
@@ -384,7 +394,7 @@ const {
             }}
           />
         )}
-        {addToGarden && (
+        {initialSyncReady && addToGarden && (
           <AddToGardenModal
             key="add-modal"
             cp={addToGarden}
@@ -407,7 +417,7 @@ const {
             }
           />
         )}
-        {customPlantOpen && (
+        {initialSyncReady && customPlantOpen && (
           <CustomPlantModal
             key="custom-plant"
             defaultLocation={
@@ -423,7 +433,7 @@ const {
             }}
           />
         )}
-        {liveDetail && (
+        {initialSyncReady && liveDetail && (
           <UserPlantSheet
             key="user-detail"
             up={liveDetail}
@@ -532,7 +542,7 @@ const {
             }}
           />
         )}
-        {editTarget && (
+        {initialSyncReady && editTarget && (
           <EditPlantModal
             key="edit-plant"
             up={
@@ -574,7 +584,7 @@ const {
             }
           />
         )}
-        {deleteTarget && (
+        {initialSyncReady && deleteTarget && (
           <DeletePlantConfirm
             key="delete-plant"
             name={deleteTarget.nickname}
@@ -596,7 +606,7 @@ const {
             }}
           />
         )}
-        {aiOpen && (
+        {initialSyncReady && aiOpen && (
           <AiAssistantSheet
             key="ai-sheet"
             context={aiContext}
@@ -606,7 +616,7 @@ const {
             }}
           />
         )}
-{dataSheetOpen && (
+{initialSyncReady && dataSheetOpen && (
   <DataSheet
     key="data-sheet"
     plants={garden.plants}

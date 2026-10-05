@@ -1,24 +1,43 @@
 import type { UserPlant } from "../types";
+import { MAX_PLANT_PHOTOS } from "./photoGallery";
+
+type PlantPhotoFields = Pick<
+  UserPlant,
+  "photoId" | "photoIds"
+> &
+  Partial<Pick<UserPlant, "deletedPhotoIds">>;
 
 export function getPlantPhotoIds(
-  plant: Pick<UserPlant, "photoId" | "photoIds">,
+  plant: PlantPhotoFields,
 ): string[] {
+  const deleted = new Set(
+    Array.isArray(plant.deletedPhotoIds)
+      ? plant.deletedPhotoIds
+      : [],
+  );
+
   const ids = Array.isArray(plant.photoIds)
     ? plant.photoIds.filter(
         (id): id is string =>
-          typeof id === "string" && id.length > 0,
+          typeof id === "string" &&
+          id.length > 0 &&
+          !deleted.has(id),
       )
     : [];
 
-  if (ids.length === 0 && plant.photoId) {
+  if (
+    ids.length === 0 &&
+    plant.photoId &&
+    !deleted.has(plant.photoId)
+  ) {
     ids.push(plant.photoId);
   }
 
-  return [...new Set(ids)];
+  return [...new Set(ids)].slice(0, MAX_PLANT_PHOTOS);
 }
 
 export function getPrimaryPlantPhotoId(
-  plant: Pick<UserPlant, "photoId" | "photoIds">,
+  plant: PlantPhotoFields,
 ): string | null {
   const ids = getPlantPhotoIds(plant);
 
@@ -34,7 +53,7 @@ export function getPrimaryPlantPhotoId(
 
 // Backward-compatible alias for existing callers.
 export function getLatestPlantPhotoId(
-  plant: Pick<UserPlant, "photoId" | "photoIds">,
+  plant: PlantPhotoFields,
 ): string | null {
   return getPrimaryPlantPhotoId(plant);
 }
