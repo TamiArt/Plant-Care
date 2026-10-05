@@ -5,20 +5,10 @@ import {
   useState,
 } from "react";
 
-import type {
-  UserPlant,
-} from "../types";
-
 import {
   getMetaValue,
   setMetaValue,
 } from "../repository/gardenRepository";
-
-import {
-  getDailySyncDelay,
-  isDailySyncDue,
-  isValidSyncTimestamp,
-} from "../model/syncSchedule";
 
 export interface AutoSyncResult {
   ok: boolean;
@@ -30,30 +20,23 @@ export interface UseGardenAutoSyncOptions {
   userId: string | null;
   authLoading: boolean;
   gardenLoading: boolean;
-
-  /**
-   * Сохраняем в контракте хука для совместимости
-   * с App. Изменения plants больше не запускают sync.
-   */
-  plants: UserPlant[];
-
-  syncWithCloud:
-    () => Promise<AutoSyncResult>;
+  syncWithCloud: () => Promise<AutoSyncResult>;
 }
 
-function lastSyncMetaKey(
-  userId: string,
-): string {
+function lastSyncMetaKey(userId: string): string {
   return `garden:lastSyncedAt:${userId}`;
 }
 
 /**
- * Планировщик облачной синхронизации.
+ * Synchronization policy:
+ * - the first authenticated app session always syncs immediately;
+ * - the UI is not considered ready until that initial attempt finishes;
+ * - later manual syncs remain available at any time;
+ * - while the app stays open, a successful sync is refreshed periodically.
  *
- * Автоматически синхронизирует сад не чаще
- * одного раза в 24 часа. Ручной sync доступен
- * всегда через syncNow(). Локальные изменения
- * сами по себе сетевой запрос не запускают.
+ * The previous 24-hour gate was intentionally removed. It allowed a device
+ * opened at 15:00 to continue using a stale local snapshot even when another
+ * device had changed the same plant at 14:10.
  */
 export function useGardenAutoSync({
   userId,
@@ -61,147 +44,110 @@ export function useGardenAutoSync({
   gardenLoading,
   syncWithCloud,
 }: UseGardenAutoSyncOptions) {
-  const runningRef =
-    useRef(false);
+  const runningRef = useRef(false);
+  const pendingRef = useRef(false);
+  const initializedUserRef = useRef<string | null>(null);
+  const [initialSyncReady, setInitialSyncReady] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  const pendingRef =
-    useRef(false);
+  const canSync = Boolean(
+    userId &&
+    !authLoading &&
+    !gardenLoading,
+  );
 
-  const loadedUserRef =
-    useRef<string | null>(null);
+  const runSync = useCallback(async (): Promise<AutoSyncResult> => {
+    if (!canSync || !userId) {
+      return {
+        ok: false,
+        error: "Синхронизация пока недоступна.",
+      };
+    }
 
-  const [persistedLastSyncedAt,
-    setPersistedLastSyncedAt,
-  ] = useState<string | null>(null);
+    if (runningRef.current) {
+      pendingRef.current = true;
+      return { ok: true };
+    }
 
-  const canSync =
-    Boolean(
-      userId &&
-      !authLoading &&
-      !gardenLoading,
-    );
+    runningRef.current = true;
 
-  const runSync =
-    useCallback(
-      async (): Promise<AutoSyncResult> => {
-        if (!canSync || !userId) {
-          return {
-            ok: false,
-            error:
-              "Синхронизация пока недоступна.",
-          };
+    let result: AutoSyncResult = { ok: true };
+
+    try {
+      do {
+        pendingRef.current = false;
+        result = await syncWithCloud();
+
+        if (result.syncedAt) {
+          setLastSyncedAt(result.syncedAt);
+          try {
+            await setMetaValue(
+              lastSyncMetaKey(userId),
+              result.syncedAt,
+            );
+          } catch {
+            // Sync itself succeeded; metadata is only a local convenience.
+          }
         }
+      } while (pendingRef.current && canSync);
 
-        if (runningRef.current) {
-          pendingRef.current = true;
+      return result;
+    } finally {
+      runningRef.current = false;
+    }
+  }, [
+    canSync,
+    syncWithCloud,
+    userId,
+  ]);
 
-          return {
-            ok: true,
-          };
-        }
-
-        runningRef.current = true;
-
-        let result: AutoSyncResult = {
-          ok: true,
-        };
-
-        try {
-          do {
-            pendingRef.current = false;
-            result = await syncWithCloud();
-
-            if (
-              result.ok &&
-              isValidSyncTimestamp(
-                result.syncedAt,
-              )
-            ) {
-              setPersistedLastSyncedAt(
-                result.syncedAt,
-              );
-
-              try {
-                await setMetaValue(
-                  lastSyncMetaKey(userId),
-                  result.syncedAt,
-                );
-              } catch {
-                /*
-                 * Сам sync уже успешен. Ошибка записи
-                 * служебного timestamp не должна его
-                 * превращать в ошибку пользователя.
-                 */
-              }
-            }
-          } while (
-            pendingRef.current &&
-            canSync
-          );
-
-          return result;
-        } finally {
-          runningRef.current = false;
-        }
-      },
-      [
-        canSync,
-        syncWithCloud,
-        userId,
-      ],
-    );
-
-  /**
-   * При смене аккаунта заново читаем timestamp
-   * последней успешной синхронизации из IndexedDB.
-   */
   useEffect(() => {
+    if (authLoading || gardenLoading) {
+      setInitialSyncReady(false);
+      return;
+    }
+
     if (!userId) {
-      loadedUserRef.current = null;
+      initializedUserRef.current = null;
       pendingRef.current = false;
-      setPersistedLastSyncedAt(null);
+      setLastSyncedAt(null);
+      setInitialSyncReady(true);
       return;
     }
 
     if (
-      !canSync ||
-      loadedUserRef.current === userId
+      initializedUserRef.current === userId &&
+      initialSyncReady
     ) {
       return;
     }
 
-    loadedUserRef.current = userId;
+    initializedUserRef.current = userId;
     let active = true;
 
     void (async () => {
-      let stored: unknown;
-
       try {
-        stored =
-          await getMetaValue<unknown>(
-            lastSyncMetaKey(userId),
-          );
+        const stored = await getMetaValue<unknown>(
+          lastSyncMetaKey(userId),
+        );
+
+        if (
+          active &&
+          typeof stored === "string" &&
+          Number.isFinite(Date.parse(stored))
+        ) {
+          setLastSyncedAt(stored);
+        }
       } catch {
-        stored = null;
+        // A missing local sync marker must never block synchronization.
       }
 
-      if (!active) {
-        return;
-      }
+      if (!active) return;
 
-      const lastSyncedAt =
-        isValidSyncTimestamp(stored)
-          ? stored
-          : null;
+      await runSync();
 
-      setPersistedLastSyncedAt(
-        lastSyncedAt,
-      );
-
-      if (
-        isDailySyncDue(lastSyncedAt)
-      ) {
-        void runSync();
+      if (active) {
+        setInitialSyncReady(true);
       }
     })();
 
@@ -209,51 +155,16 @@ export function useGardenAutoSync({
       active = false;
     };
   }, [
-    canSync,
+    authLoading,
+    gardenLoading,
+    initialSyncReady,
     runSync,
     userId,
   ]);
 
-  /**
-   * Если приложение остаётся открытым больше суток,
-   * выполняем следующий автоматический sync после
-   * истечения 24 часов с успешного предыдущего.
-   */
-  useEffect(() => {
-    if (
-      !canSync ||
-      !persistedLastSyncedAt
-    ) {
-      return;
-    }
-
-    const delay =
-      getDailySyncDelay(
-        persistedLastSyncedAt,
-      );
-
-    if (delay === null) {
-      return;
-    }
-
-    const timeout =
-      window.setTimeout(
-        () => {
-          void runSync();
-        },
-        delay,
-      );
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [
-    canSync,
-    persistedLastSyncedAt,
-    runSync,
-  ]);
-
   return {
     syncNow: runSync,
+    initialSyncReady,
+    lastSyncedAt,
   };
 }
