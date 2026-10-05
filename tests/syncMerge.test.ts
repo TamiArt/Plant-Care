@@ -360,3 +360,33 @@ test(
     );
   },
 );
+
+
+test(
+  "uses the newer gallery version and never exceeds three photos",
+  () => {
+    const remote = plant({
+      updatedAt: "2026-08-17T14:00:00.000Z",
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2", "photo-3"],
+    });
+    const incoming = plant({
+      updatedAt: "2026-08-17T15:00:00.000Z",
+      photoId: "photo-4",
+      photoIds: ["photo-1", "photo-2", "photo-4"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T15:01:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, [
+      "photo-1",
+      "photo-2",
+      "photo-4",
+    ]);
+    assert.equal(result.photoId, "photo-4");
+  },
+);
