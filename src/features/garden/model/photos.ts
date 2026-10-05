@@ -2,8 +2,9 @@ import type { UserPlant } from "../types";
 
 type PlantPhotoFields = Pick<
   UserPlant,
-  "photoId" | "photoIds" | "deletedPhotoIds"
->;
+  "photoId" | "photoIds"
+> &
+  Partial<Pick<UserPlant, "deletedPhotoIds">>;
 
 export function getPlantPhotoIds(
   plant: PlantPhotoFields,
