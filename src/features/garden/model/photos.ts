@@ -1,4 +1,5 @@
 import type { UserPlant } from "../types";
+import { MAX_PLANT_PHOTOS } from "./photoGallery";
 
 type PlantPhotoFields = Pick<
   UserPlant,
@@ -32,7 +33,7 @@ export function getPlantPhotoIds(
     ids.push(plant.photoId);
   }
 
-  return [...new Set(ids)];
+  return [...new Set(ids)].slice(0, MAX_PLANT_PHOTOS);
 }
 
 export function getPrimaryPlantPhotoId(
