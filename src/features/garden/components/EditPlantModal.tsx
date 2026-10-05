@@ -26,6 +26,7 @@ import {
 import type { UserPlant } from "../types";
 import { getPlantPhoto } from "../repository/gardenRepository";
 import { getPlantPhotoIds } from "../model/photos";
+import { MAX_PLANT_PHOTOS } from "../model/photoGallery";
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
@@ -149,117 +150,50 @@ export function EditPlantModal({
   onClose: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [nickname, setNickname] =
-    useState(up.nickname);
-  const [
-    wateringInterval,
-    setWateringInterval,
-  ] = useState(up.wateringInterval);
-  const [
-    lastWateringDate,
-    setLastWateringDate,
-  ] = useState(
-    up.wateringHistory.at(-1)?.slice(0, 10) ??
-      "",
+  const [nickname, setNickname] = useState(up.nickname);
+  const [wateringInterval, setWateringInterval] = useState(up.wateringInterval);
+  const [lastWateringDate, setLastWateringDate] = useState(
+    up.wateringHistory.at(-1)?.slice(0, 10) ?? "",
   );
-  const [
-    fertilizingInterval,
-    setFertilizingInterval,
-  ] = useState(up.fertilizingInterval);
-  const [
-    mistingEnabled,
-    setMistingEnabled,
-  ] = useState(
-    isMistingEnabled(up),
-  );
-  const [
-    lightEnabled,
-    setLightEnabled,
-  ] = useState(
-    Boolean(up.supplementalLight),
-  );
-  const [
-    lightStart,
-    setLightStart,
-  ] = useState(
-    up.supplementalLight?.start ??
-      "12:00",
-  );
-  const [
-    lightEnd,
-    setLightEnd,
-  ] = useState(
-    up.supplementalLight?.end ??
-      "22:00",
-  );
-  const [description, setDescription] =
-    useState(up.customDescription ?? "");
+  const [fertilizingInterval, setFertilizingInterval] = useState(up.fertilizingInterval);
+  const [mistingEnabled, setMistingEnabled] = useState(isMistingEnabled(up));
+  const [lightEnabled, setLightEnabled] = useState(Boolean(up.supplementalLight));
+  const [lightStart, setLightStart] = useState(up.supplementalLight?.start ?? "12:00");
+  const [lightEnd, setLightEnd] = useState(up.supplementalLight?.end ?? "22:00");
+  const [description, setDescription] = useState(up.customDescription ?? "");
   const initialPhotoIds = getPlantPhotoIds(up);
   const [photoSlots, setPhotoSlots] = useState<
     Array<{ photoId?: string; photo?: PreparedPhoto }>
-  >(() =>
-    initialPhotoIds.map(photoId => ({
-      photoId,
-    })),
-  );
-  const [primaryPhotoIndex, setPrimaryPhotoIndex] =
-    useState<number | null>(() => {
-      const primaryId =
-        typeof up.photoId === "string"
-          ? up.photoId
-          : null;
-      const index = primaryId
-        ? initialPhotoIds.indexOf(primaryId)
-        : -1;
-
-      return index >= 0
-        ? index
-        : initialPhotoIds.length > 0
-          ? initialPhotoIds.length - 1
-          : null;
-    });
-  const [isPreparing, setIsPreparing] =
-    useState(false);
-  const [isSaving, setIsSaving] =
-    useState(false);
+  >(() => initialPhotoIds.map(photoId => ({ photoId })));
+  const [primaryPhotoIndex, setPrimaryPhotoIndex] = useState<number | null>(() => {
+    const primaryId = typeof up.photoId === "string" ? up.photoId : null;
+    const index = primaryId ? initialPhotoIds.indexOf(primaryId) : -1;
+    return index >= 0 ? index : initialPhotoIds.length > 0 ? 0 : null;
+  });
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-
   const selectedPhotoIndex = useRef<number | null>(null);
 
-  const handlePhoto = async (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handlePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     const index = selectedPhotoIndex.current;
     event.target.value = "";
 
-    if (!file || index === null) {
-      return;
-    }
+    if (!file || index === null) return;
 
     setIsPreparing(true);
     setError("");
 
     try {
       const prepared = await preparePhoto(file);
-
       setPhotoSlots(current => {
         const next = [...current];
-
-        while (next.length < index) {
-          next.push({});
-        }
-
-        next[index] = {
-          photo: prepared,
-        };
-
-        return next;
+        while (next.length < index) next.push({});
+        next[index] = { photo: prepared };
+        return next.slice(0, MAX_PLANT_PHOTOS);
       });
-
-      if (primaryPhotoIndex === null) {
-        setPrimaryPhotoIndex(index);
-      }
+      if (primaryPhotoIndex === null) setPrimaryPhotoIndex(index);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -278,44 +212,33 @@ export function EditPlantModal({
   };
 
   const handleAddPhoto = () => {
+    if (photoSlots.length >= MAX_PLANT_PHOTOS) {
+      setError("У растения может быть не более 3 фотографий.");
+      return;
+    }
+    setError("");
     selectedPhotoIndex.current = photoSlots.length;
     fileRef.current?.click();
   };
 
   const handleRemovePhoto = (index: number) => {
     setPhotoSlots(current =>
-      current.filter((_, itemIndex) =>
-        itemIndex !== index,
-      ),
+      current.filter((_, itemIndex) => itemIndex !== index),
     );
-
     setPrimaryPhotoIndex(current => {
       if (current === null) return null;
       if (current === index) {
         const nextLength = photoSlots.length - 1;
-        return nextLength > 0
-          ? Math.min(index, nextLength - 1)
-          : null;
+        return nextLength > 0 ? Math.min(index, nextLength - 1) : null;
       }
-      return current > index
-        ? current - 1
-        : current;
+      return current > index ? current - 1 : current;
     });
   };
 
   const handleSave = async () => {
-    if (
-      !nickname.trim() ||
-      isPreparing ||
-      isSaving
-    ) {
-      return;
-    }
+    if (!nickname.trim() || isPreparing || isSaving) return;
 
-    if (
-      lightEnabled &&
-      lightStart === lightEnd
-    ) {
+    if (lightEnabled && lightStart === lightEnd) {
       setError(
         "Время начала и окончания дополнительного освещения должно отличаться.",
       );
@@ -331,36 +254,26 @@ export function EditPlantModal({
         wateringInterval,
         fertilizingInterval,
         mistingEnabled,
-        supplementalLight:
-          lightEnabled
-            ? {
-                start: lightStart,
-                end: lightEnd,
-              }
-            : null,
-        wateringHistory:
-          replaceLastWateringDate(
-            up.wateringHistory,
-            lastWateringDate || null,
-          ),
-        customDescription:
-          description.trim() || undefined,
+        supplementalLight: lightEnabled
+          ? { start: lightStart, end: lightEnd }
+          : null,
+        wateringHistory: replaceLastWateringDate(
+          up.wateringHistory,
+          lastWateringDate || null,
+        ),
+        customDescription: description.trim() || undefined,
       },
       photo: null,
       removePhoto: false,
-      gallery: photoSlots,
+      gallery: photoSlots.slice(0, MAX_PLANT_PHOTOS),
       primaryPhotoIndex,
     });
 
     setIsSaving(false);
 
-    if (saved) {
-      onClose();
-    } else {
-      setError("Не удалось сохранить изменения.");
-    }
+    if (saved) onClose();
+    else setError("Не удалось сохранить изменения.");
   };
-
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center px-4 pb-8">
@@ -395,7 +308,7 @@ export function EditPlantModal({
               Фотографии растения
             </p>
             <span className="text-[10px] text-muted-foreground">
-              {photoSlots.length} фото
+              {photoSlots.length} / {MAX_PLANT_PHOTOS} фото
             </span>
           </div>
 
@@ -406,18 +319,10 @@ export function EditPlantModal({
                   key={slot.photoId ?? `new-${index}`}
                   photoId={slot.photoId}
                   photo={slot.photo}
-                  isPrimary={
-                    primaryPhotoIndex === index
-                  }
-                  onSelect={() =>
-                    handleSelectPhoto(index)
-                  }
-                  onMakePrimary={() =>
-                    setPrimaryPhotoIndex(index)
-                  }
-                  onRemove={() =>
-                    handleRemovePhoto(index)
-                  }
+                  isPrimary={primaryPhotoIndex === index}
+                  onSelect={() => handleSelectPhoto(index)}
+                  onMakePrimary={() => setPrimaryPhotoIndex(index)}
+                  onRemove={() => handleRemovePhoto(index)}
                 />
               ))}
             </div>
@@ -438,18 +343,23 @@ export function EditPlantModal({
 
           <button
             type="button"
-            disabled={isPreparing || isSaving}
+            disabled={
+              isPreparing ||
+              isSaving ||
+              photoSlots.length >= MAX_PLANT_PHOTOS
+            }
             onClick={handleAddPhoto}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-40"
           >
             <ImagePlus size={15} />
-            Добавить фотографию
+            {photoSlots.length >= MAX_PLANT_PHOTOS
+              ? "Максимум 3 фотографии"
+              : "Добавить фотографию"}
           </button>
 
           <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-            Все фотографии сохраняются. Нажмите «Сделать главным»,
-            чтобы выбрать фото, которое будет показываться в общей
-            карточке растения.
+            Все фотографии сохраняются. Нажмите «Сделать главным», чтобы выбрать
+            фото, которое будет показываться в общей карточке растения.
           </p>
 
           {isPreparing && (
@@ -470,9 +380,7 @@ export function EditPlantModal({
         </label>
         <input
           value={nickname}
-          onChange={event =>
-            setNickname(event.target.value)
-          }
+          onChange={event => setNickname(event.target.value)}
           className="mb-4 w-full rounded-2xl bg-muted px-4 py-3 text-sm outline-none"
         />
 
@@ -481,9 +389,7 @@ export function EditPlantModal({
         </label>
         <textarea
           value={description}
-          onChange={event =>
-            setDescription(event.target.value)
-          }
+          onChange={event => setDescription(event.target.value)}
           rows={3}
           className="mb-4 w-full resize-none rounded-2xl bg-muted px-4 py-3 text-sm outline-none"
           placeholder="Особенности ухода или растения"
@@ -498,11 +404,7 @@ export function EditPlantModal({
             min={1}
             max={60}
             value={wateringInterval}
-            onChange={event =>
-              setWateringInterval(
-                Number(event.target.value),
-              )
-            }
+            onChange={event => setWateringInterval(Number(event.target.value))}
             className="min-w-0 flex-1 accent-primary"
           />
           <input
@@ -513,13 +415,7 @@ export function EditPlantModal({
             value={wateringInterval}
             onChange={event =>
               setWateringInterval(
-                Math.min(
-                  60,
-                  Math.max(
-                    1,
-                    Number(event.target.value) || 1,
-                  ),
-                ),
+                Math.min(60, Math.max(1, Number(event.target.value) || 1)),
               )
             }
             className="w-16 rounded-xl bg-muted px-2 py-2 text-center text-sm outline-none"
@@ -534,9 +430,7 @@ export function EditPlantModal({
             {lastWateringDate && (
               <button
                 type="button"
-                onClick={() =>
-                  setLastWateringDate("")
-                }
+                onClick={() => setLastWateringDate("")}
                 className="text-[11px] font-medium text-red-500"
               >
                 Удалить отметку
@@ -547,11 +441,7 @@ export function EditPlantModal({
             type="date"
             max={todayStr()}
             value={lastWateringDate}
-            onChange={event =>
-              setLastWateringDate(
-                event.target.value,
-              )
-            }
+            onChange={event => setLastWateringDate(event.target.value)}
             className="w-full rounded-2xl bg-muted px-4 py-3 text-sm outline-none"
           />
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
@@ -573,11 +463,7 @@ export function EditPlantModal({
             <input
               type="checkbox"
               checked={mistingEnabled}
-              onChange={event =>
-                setMistingEnabled(
-                  event.target.checked,
-                )
-              }
+              onChange={event => setMistingEnabled(event.target.checked)}
               className="h-5 w-5 flex-shrink-0 accent-primary"
             />
           </label>
@@ -597,11 +483,7 @@ export function EditPlantModal({
             <input
               type="checkbox"
               checked={lightEnabled}
-              onChange={event =>
-                setLightEnabled(
-                  event.target.checked,
-                )
-              }
+              onChange={event => setLightEnabled(event.target.checked)}
               className="h-5 w-5 flex-shrink-0 accent-primary"
             />
           </label>
@@ -613,11 +495,7 @@ export function EditPlantModal({
                 <input
                   type="time"
                   value={lightStart}
-                  onChange={event =>
-                    setLightStart(
-                      event.target.value,
-                    )
-                  }
+                  onChange={event => setLightStart(event.target.value)}
                   className="mt-1 w-full rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground outline-none"
                 />
               </label>
@@ -626,11 +504,7 @@ export function EditPlantModal({
                 <input
                   type="time"
                   value={lightEnd}
-                  onChange={event =>
-                    setLightEnd(
-                      event.target.value,
-                    )
-                  }
+                  onChange={event => setLightEnd(event.target.value)}
                   className="mt-1 w-full rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground outline-none"
                 />
               </label>
@@ -646,11 +520,7 @@ export function EditPlantModal({
           min={0}
           max={90}
           value={fertilizingInterval}
-          onChange={event =>
-            setFertilizingInterval(
-              Number(event.target.value),
-            )
-          }
+          onChange={event => setFertilizingInterval(Number(event.target.value))}
           className="mb-5 w-full accent-primary"
         />
 
@@ -665,11 +535,7 @@ export function EditPlantModal({
           </button>
           <button
             type="button"
-            disabled={
-              !nickname.trim() ||
-              isPreparing ||
-              isSaving
-            }
+            disabled={!nickname.trim() || isPreparing || isSaving}
             onClick={() => void handleSave()}
             className="flex-1 rounded-2xl bg-primary py-3.5 text-sm font-medium text-primary-foreground disabled:opacity-40"
           >
