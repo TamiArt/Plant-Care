@@ -110,7 +110,7 @@ function normalizePhotoGallery(
         id => id.length > 0 && !deletedPhotoIds.includes(id),
       ),
     ),
-  ];
+  ].slice(0, 3);
 
   if (
     photoId &&
