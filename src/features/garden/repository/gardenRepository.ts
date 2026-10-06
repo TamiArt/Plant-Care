@@ -81,7 +81,21 @@ function normalizePlantRecord(
       photoIds: Array.isArray(withoutLegacyPhoto.photoIds)
         ? withoutLegacyPhoto.photoIds.filter((id): id is string => typeof id === "string")
         : undefined,
+      deletedPhotoIds: Array.isArray(withoutLegacyPhoto.deletedPhotoIds)
+        ? withoutLegacyPhoto.deletedPhotoIds.filter(
+            (id): id is string => typeof id === "string",
+          )
+        : undefined,
     }),
+      deletedPhotoIds: Array.isArray(withoutLegacyPhoto.deletedPhotoIds)
+        ? [
+            ...new Set(
+              withoutLegacyPhoto.deletedPhotoIds.filter(
+                (id): id is string => typeof id === "string",
+              ),
+            ),
+          ]
+        : [],
 
     createdAt,
 
