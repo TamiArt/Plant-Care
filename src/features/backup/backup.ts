@@ -14,6 +14,7 @@ export type BackupTab =
   | "garden"
   | "catalog"
   | "checklist"
+  | "notes"
   | "add";
 
 export interface PlantCareSettings {
@@ -25,12 +26,22 @@ export const DEFAULT_SETTINGS:
     lastActiveTab: "home",
   };
 
+export interface BackupGlobalNote {
+  id: string;
+  date: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlantCareBackup {
   app: "plantcare";
   version: typeof BACKUP_VERSION;
   exportedAt: string;
   settings: PlantCareSettings;
   plants: UserPlant[];
+  /** Optional for compatibility with older backups. */
+  globalNotes?: BackupGlobalNote[];
 }
 
 interface LegacyBackup {
@@ -193,6 +204,7 @@ function normalizeSettings(
     "garden",
     "catalog",
     "checklist",
+    "notes",
     "add",
   ];
 
@@ -212,6 +224,7 @@ export function createBackup(
   plants: UserPlant[],
   settings: PlantCareSettings =
     DEFAULT_SETTINGS,
+  globalNotes: BackupGlobalNote[] = [],
 ): PlantCareBackup {
   return {
     app: "plantcare",
@@ -221,6 +234,13 @@ export function createBackup(
     settings:
       normalizeSettings(settings),
     plants,
+    globalNotes: globalNotes.filter(note =>
+      typeof note.id === "string" &&
+      typeof note.date === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(note.date) &&
+      typeof note.content === "string" &&
+      typeof note.createdAt === "string" &&
+      typeof note.updatedAt === "string",
+    ),
   };
 }
 
@@ -294,6 +314,19 @@ export function parseBackup(
             raw.settings,
           ),
     plants: plants as UserPlant[],
+    ...(Array.isArray(raw.globalNotes)
+      ? {
+          globalNotes: raw.globalNotes.filter((item): item is BackupGlobalNote =>
+            isRecord(item) &&
+            typeof item.id === "string" &&
+            typeof item.date === "string" &&
+            /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date) &&
+            typeof item.content === "string" &&
+            typeof item.createdAt === "string" &&
+            typeof item.updatedAt === "string",
+          ),
+        }
+      : {}),
   };
 
   return {

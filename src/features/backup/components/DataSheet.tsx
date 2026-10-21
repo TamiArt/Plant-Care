@@ -44,10 +44,12 @@ import {
   mergeBackupPlants,
   parseBackup,
   type PlantCareSettings,
+  type BackupGlobalNote,
 } from "../backup";
 
 export interface DataSheetProps {
   plants: UserPlant[];
+  globalNotes: BackupGlobalNote[];
   settings: PlantCareSettings;
   authUser: AuthUser | null;
   authLoading: boolean;
@@ -68,6 +70,7 @@ export interface DataSheetProps {
     plants: UserPlant[],
     settings: PlantCareSettings | null,
     mode: "replace" | "merge",
+    globalNotes?: BackupGlobalNote[],
   ) => void;
 
   onClose: () => void;
@@ -75,6 +78,7 @@ export interface DataSheetProps {
 
 export function DataSheet({
   plants,
+  globalNotes,
   settings,
   authUser,
   authLoading,
@@ -191,6 +195,7 @@ export function DataSheet({
             merged.plants,
             null,
             "merge",
+            backup.globalNotes,
           );
 
           setImportedCount(
@@ -201,6 +206,7 @@ export function DataSheet({
             backup.plants,
             backup.settings,
             "replace",
+            backup.globalNotes,
           );
 
           setImportedCount(
@@ -461,6 +467,7 @@ export function DataSheet({
                   createBackup(
                     plants,
                     settings,
+                    globalNotes,
                   ),
                 )
               }

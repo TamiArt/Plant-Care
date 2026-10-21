@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Bot } from "lucide-react";
 import { BottomNav } from "./components/BottomNav";
+import { GlobalNotesScreen, useGlobalCareNotes } from "./components/GlobalNotesScreen";
 import { getInitialTab, type Tab } from "./navigation";
 import { PwaStatus, usePwa } from "../features/pwa";
 import {
@@ -81,6 +82,7 @@ function resolvePlantPresentation(plant: UserPlant) {
 }
 export default function App() {
   const garden = useGarden();
+  const globalCareNotes = useGlobalCareNotes();
   const auth = useAuth();
   const {
     syncNow,
@@ -277,33 +279,27 @@ const {
   onUpdate={applyUpdate}
   closeInstall={closeInstall}
 />
-      {!initialSyncReady && !garden.isLoading && (
-        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/95 px-6 text-center backdrop-blur-sm">
-          <div className="max-w-xs">
-            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <p className="text-sm font-semibold text-foreground">Синхронизация данных…</p>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Получаем последнюю версию сада и фотографий перед началом работы.
-            </p>
-          </div>
+      {!initialSyncReady && !garden.isLoading && auth.isAuthenticated && (
+        <div role="status" className="pointer-events-none absolute left-1/2 top-3 z-[100] -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+          Синхронизация в фоне…
         </div>
       )}
       <div className="flex-1 overflow-hidden">
-        {initialSyncReady && tab === "home" && (
+        {!garden.isLoading && tab === "home" && (
           <PlantsScreen
             location="home"
             plants={garden.plants}
             {...sharedScreenProps}
           />
         )}
-        {initialSyncReady && tab === "garden" && (
+        {!garden.isLoading && tab === "garden" && (
           <PlantsScreen
             location="outdoor"
             plants={garden.plants}
             {...sharedScreenProps}
           />
         )}
-        {initialSyncReady && tab === "catalog" && (
+        {!garden.isLoading && tab === "catalog" && (
           <CatalogScreen
             onSelect={(cp) => {
               setPendingPhoto(null);
@@ -311,10 +307,20 @@ const {
             }}
           />
         )}
-        {initialSyncReady && tab === "checklist" && (
+        {!garden.isLoading && tab === "checklist" && (
           <ChecklistScreen />
         )}
-        {initialSyncReady && tab === "add" && (
+        {!garden.isLoading && tab === "notes" && (
+          <GlobalNotesScreen
+            notes={globalCareNotes.notes}
+            ready={globalCareNotes.ready}
+            error={globalCareNotes.error}
+            onAdd={globalCareNotes.addNote}
+            onUpdate={globalCareNotes.updateNote}
+            onDelete={globalCareNotes.deleteNote}
+          />
+        )}
+        {!garden.isLoading && tab === "add" && (
           <AddScreen
             onSelectCatalog={(cp, photo) => {
               if (!requireAuthForAdd()) {
@@ -333,7 +339,7 @@ const {
           />
         )}
       </div>
-      {initialSyncReady && <BottomNav
+      {!garden.isLoading && <BottomNav
         active={tab}
         onChange={(nextTab) => {
           if (
@@ -347,7 +353,7 @@ const {
         homeCount={homeCount}
         gardenCount={gardenCount}
       />}
-      {initialSyncReady && !aiOpen && (
+      {!garden.isLoading && !aiOpen && (
         <button
           onClick={() => {
             if (liveDetail) {
@@ -378,7 +384,7 @@ const {
         </button>
       )}
       <AnimatePresence>
-        {initialSyncReady && catalogDetail && !addToGarden && (
+        {!garden.isLoading && catalogDetail && !addToGarden && (
           <CatalogDetailSheet
             key="cat-detail"
             cp={catalogDetail}
@@ -394,7 +400,7 @@ const {
             }}
           />
         )}
-        {initialSyncReady && addToGarden && (
+        {!garden.isLoading && addToGarden && (
           <AddToGardenModal
             key="add-modal"
             cp={addToGarden}
@@ -417,7 +423,7 @@ const {
             }
           />
         )}
-        {initialSyncReady && customPlantOpen && (
+        {!garden.isLoading && customPlantOpen && (
           <CustomPlantModal
             key="custom-plant"
             defaultLocation={
@@ -433,7 +439,7 @@ const {
             }}
           />
         )}
-        {initialSyncReady && liveDetail && (
+        {!garden.isLoading && liveDetail && (
           <UserPlantSheet
             key="user-detail"
             up={liveDetail}
@@ -543,7 +549,7 @@ const {
             }}
           />
         )}
-        {initialSyncReady && editTarget && (
+        {!garden.isLoading && editTarget && (
           <EditPlantModal
             key="edit-plant"
             up={
@@ -585,7 +591,7 @@ const {
             }
           />
         )}
-        {initialSyncReady && deleteTarget && (
+        {!garden.isLoading && deleteTarget && (
           <DeletePlantConfirm
             key="delete-plant"
             name={deleteTarget.nickname}
@@ -607,7 +613,7 @@ const {
             }}
           />
         )}
-        {initialSyncReady && aiOpen && (
+        {!garden.isLoading && aiOpen && (
           <AiAssistantSheet
             key="ai-sheet"
             context={aiContext}
@@ -617,10 +623,11 @@ const {
             }}
           />
         )}
-{initialSyncReady && dataSheetOpen && (
+{!garden.isLoading && dataSheetOpen && (
   <DataSheet
     key="data-sheet"
     plants={garden.plants}
+    globalNotes={globalCareNotes.notes}
     settings={{
       ...DEFAULT_SETTINGS,
       lastActiveTab: tab,
@@ -659,6 +666,7 @@ const {
             "Вы вышли из аккаунта, но локальные данные не удалось очистить. Перезагрузите приложение и повторите выход.",
         };
       }
+      await globalCareNotes.replaceNotes([], "replace");
       setUserDetail(null);
       setEditTarget(null);
       setDeleteTarget(null);
@@ -669,9 +677,13 @@ const {
     onImport={(
       plants,
       importedSettings,
-      mode
+      mode,
+      importedGlobalNotes,
     ) => {
       void garden.replacePlants(plants);
+      if (importedGlobalNotes) {
+        void globalCareNotes.replaceNotes(importedGlobalNotes, mode);
+      }
       if (
         mode === "replace" &&
         importedSettings

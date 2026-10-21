@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createBackup, mergeBackupPlants, parseBackup, serializeBackup } from "../src/features/backup/backup.ts";
 import type { UserPlant } from "../src/features/garden/types.ts";
+import type { BackupGlobalNote } from "../src/features/backup/backup.ts";
 
 const plant: UserPlant = {
   id: "plant-1",
@@ -19,10 +20,17 @@ const plant: UserPlant = {
   reminders: [{ id: "reminder-1", title: "Пересадить", date: "2026-08-10", done: false }],
 };
 
-test("round-trips all garden data and portable settings in backup v2", () => {
+test("round-trips all garden data, global notes and portable settings in backup v2", () => {
+  const globalNotes: BackupGlobalNote[] = [{
+    id: "global-note-1",
+    date: "2026-10-15",
+    content: "Обработала все растения от клеща",
+    createdAt: "2026-10-15T09:00:00.000Z",
+    updatedAt: "2026-10-15T09:00:00.000Z",
+  }];
   const original = createBackup([plant], {
     lastActiveTab: "garden",
-  });
+  }, globalNotes);
   const result = parseBackup(JSON.parse(serializeBackup(original)));
 
   assert.equal(result.error, undefined);
@@ -31,6 +39,7 @@ test("round-trips all garden data and portable settings in backup v2", () => {
   assert.equal(result.backup?.plants[0].photo, plant.photo);
   assert.deepEqual(result.backup?.plants[0].notes, plant.notes);
   assert.deepEqual(result.backup?.plants[0].reminders, plant.reminders);
+  assert.deepEqual(result.backup?.globalNotes, globalNotes);
 });
 
 test("migrates a legacy v1 backup without losing plants", () => {
@@ -40,6 +49,7 @@ test("migrates a legacy v1 backup without losing plants", () => {
   assert.equal(result.backup?.version, 2);
   assert.equal(result.backup?.plants[0].nickname, "Моя монстера");
   assert.equal(result.backup?.settings.lastActiveTab, "home");
+  assert.equal(result.backup?.globalNotes, undefined);
 });
 
 test("rejects unsupported and damaged backup files", () => {
