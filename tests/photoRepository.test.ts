@@ -122,3 +122,25 @@ test("savePhoto detects an ownership race after the database write", async () =>
   assert.ok(insertSql);
   assert.match(insertSql, /plant_photos\.plant_id\s*=\s*excluded\.plant_id/);
 });
+
+
+test("savePhoto does not silently revive a deleted photo from stale local metadata", async () => {
+  const mock = createEnv([{
+    id: "photo-1",
+    user_id: "user-1",
+    plant_id: "plant-1",
+    mime_type: "image/webp",
+    width: 100,
+    height: 100,
+    byte_size: 3,
+    created_at: "2026-10-20T10:00:00.000Z",
+    updated_at: "2026-10-20T10:00:00.000Z",
+    deleted_at: "2026-10-21T09:00:00.000Z",
+  }]);
+
+  assert.equal(
+    await savePhoto(mock.env, input),
+    "conflict",
+  );
+  assert.equal(mock.writeCount, 0);
+});
