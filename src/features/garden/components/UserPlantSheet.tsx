@@ -228,7 +228,7 @@ export function UserPlantSheet({
                 {notes.length === 0 ? (
                   <div className="text-center py-10"><StickyNote size={32} className="mx-auto text-muted-foreground mb-2 opacity-40" /><p className="text-sm text-muted-foreground">Нет заметок. Добавьте первую!</p></div>
                 ) : (
-                  [...notes].reverse().map(note => (
+                  [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(note => (
                     <div key={note.id} className="bg-card border border-border rounded-2xl p-3.5 relative group">
                       <div className="flex items-start justify-between gap-2 mb-1"><p className="text-[10px] text-muted-foreground">{formatDate(note.createdAt)}</p><button onClick={() => onDeleteNote(note.id)} className="opacity-50 hover:opacity-100 transition-opacity"><Trash2 size={12} className="text-red-400" /></button></div>
                       <NoteContent content={note.content} onToggleChecklist={lineIndex => onToggleNoteItem(note.id, lineIndex)} />
