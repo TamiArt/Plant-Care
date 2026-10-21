@@ -627,6 +627,7 @@ const {
   <DataSheet
     key="data-sheet"
     plants={garden.plants}
+    globalNotes={globalCareNotes.notes}
     settings={{
       ...DEFAULT_SETTINGS,
       lastActiveTab: tab,
@@ -675,9 +676,13 @@ const {
     onImport={(
       plants,
       importedSettings,
-      mode
+      mode,
+      importedGlobalNotes,
     ) => {
       void garden.replacePlants(plants);
+      if (importedGlobalNotes) {
+        void globalCareNotes.replaceNotes(importedGlobalNotes, mode);
+      }
       if (
         mode === "replace" &&
         importedSettings
