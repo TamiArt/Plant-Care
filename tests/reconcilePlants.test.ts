@@ -228,3 +228,27 @@ test("does not resurrect a photo deleted locally when the remote still has it", 
     "photo-1",
   ]);
 });
+
+
+test("bumps plant metadata timestamp when merging a locally added photo into a newer remote plant", () => {
+  const local = plant({
+    photoId: "photo-local",
+    photoIds: ["photo-local"],
+    updatedAt: "2026-08-17T10:00:00.000Z",
+  });
+  const remote = plant({
+    photoId: null,
+    photoIds: [],
+    nickname: "Новое имя с сервера",
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.equal(result.nickname, "Новое имя с сервера");
+  assert.deepEqual(result.photoIds, ["photo-local"]);
+  assert.ok(
+    result.updatedAt > remote.updatedAt,
+    "the merged gallery must be written after the remote version",
+  );
+});
