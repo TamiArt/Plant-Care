@@ -853,7 +853,7 @@ export function useGarden() {
             createId(),
 
           createdAt:
-            /^\\d{4}-\\d{2}-\\d{2}$/.test(eventDate) ? eventDate : todayStr(),
+            /^\d{4}-\d{2}-\d{2}$/.test(eventDate) ? eventDate : todayStr(),
 
           content,
         };
