@@ -6,6 +6,7 @@ import {
   deletePhoto,
   getOwnedPlant,
   getPhoto,
+  plantReferencesPhoto,
   classifyPhotoOwnership,
   getPhotoMetadataById,
   MAX_CLOUD_PHOTO_BYTES,
@@ -260,19 +261,7 @@ export async function handlePutPhoto(
    * Нельзя загрузить Blob под произвольным photoId.
    * photoId должен входить в актуальную галерею растения.
    */
-  if (
-    !(() => {
-      try {
-        const ids: unknown = JSON.parse(plant.photo_ids);
-        return (
-          Array.isArray(ids) &&
-          ids.includes(photoId)
-        ) || plant.photo_id === photoId;
-      } catch {
-        return plant.photo_id === photoId;
-      }
-    })()
-  ) {
+  if (!plantReferencesPhoto(plant, photoId)) {
     return json(
       {
         error:
