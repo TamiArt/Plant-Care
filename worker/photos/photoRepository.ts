@@ -89,6 +89,38 @@ export async function getPhotoMetadata(
     .first<PhotoMetadataRow>();
 }
 
+/**
+ * Looks up an ID globally so a UUID collision with another user's
+ * photo cannot be mistaken for a new photo. Callers must not expose
+ * the other user's metadata in API responses.
+ */
+export async function getPhotoMetadataById(
+  env: PhotoEnv,
+  photoId: string,
+): Promise<PhotoMetadataRow | null> {
+  return env.DB
+    .prepare(
+      `
+        SELECT
+          id,
+          user_id,
+          plant_id,
+          mime_type,
+          width,
+          height,
+          byte_size,
+          created_at,
+          updated_at,
+          deleted_at
+        FROM plant_photos
+        WHERE id = ?1
+        LIMIT 1
+      `,
+    )
+    .bind(photoId)
+    .first<PhotoMetadataRow>();
+}
+
 export async function getPhoto(
   env: PhotoEnv,
   userId: string,
@@ -146,13 +178,22 @@ export async function savePhoto(
 
     updatedAt: string;
   },
-): Promise<void> {
+): Promise<"saved" | "unchanged" | "conflict"> {
   const existing =
-    await getPhotoMetadata(
+    await getPhotoMetadataById(
       env,
-      input.userId,
       input.id,
     );
+
+  if (
+    existing &&
+    (
+      existing.user_id !== input.userId ||
+      existing.plant_id !== input.plantId
+    )
+  ) {
+    return "conflict";
+  }
 
   /*
    * Если сервер уже имеет такую же
@@ -164,7 +205,7 @@ export async function savePhoto(
     existing.updated_at >=
       input.updatedAt
   ) {
-    return;
+    return "unchanged";
   }
 
   const createdAt =
@@ -237,6 +278,9 @@ export async function savePhoto(
           plant_photos.user_id =
             excluded.user_id
           AND
+          plant_photos.plant_id =
+            excluded.plant_id
+          AND
           excluded.updated_at >
             plant_photos.updated_at
       `,
@@ -260,6 +304,22 @@ export async function savePhoto(
       input.updatedAt,
     )
     .run();
+
+  /*
+   * The preflight check above is not atomic with INSERT. Re-read the
+   * globally unique ID after a no-op write to detect a concurrent
+   * insert/ownership change instead of returning a false success.
+   */
+  const persisted = await getPhotoMetadataById(env, input.id);
+  if (
+    !persisted ||
+    persisted.user_id !== input.userId ||
+    persisted.plant_id !== input.plantId
+  ) {
+    return "conflict";
+  }
+
+  return "saved";
 }
 
 export async function deletePhoto(
