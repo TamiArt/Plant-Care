@@ -18,6 +18,22 @@ import type {
 export const MAX_CLOUD_PHOTO_BYTES =
   400 * 1024;
 
+export function plantReferencesPhoto(
+  plant: Pick<PlantOwnershipRow, "photo_id" | "photo_ids">,
+  photoId: string,
+): boolean {
+  try {
+    const ids: unknown = JSON.parse(plant.photo_ids);
+    return (
+      Array.isArray(ids) &&
+      ids.includes(photoId)
+    ) || plant.photo_id === photoId;
+  } catch {
+    // Older records may only have the legacy primary photo field.
+    return plant.photo_id === photoId;
+  }
+}
+
 export async function getOwnedPlant(
   env: PhotoEnv,
   userId: string,
