@@ -10,6 +10,7 @@ import {
 } from "../src/features/garden/model/photoGallery.ts";
 import {
   findMissingPlantPhotoIds,
+  findUnconfirmedPhotoReferences,
   getReferencedPlantPhotoIds,
 } from "../src/features/garden/model/photoSyncIntegrity.ts";
 
@@ -266,4 +267,61 @@ test("adding a fourth photo does not replace the existing three", () => {
   ]);
   assert.deepEqual(result.newPhotos, []);
   assert.deepEqual(result.removedPhotoIds, []);
+});
+
+
+test("detects photo references not yet acknowledged by the server for the same plant", () => {
+  const localPlants = [
+    {
+      id: "plant-1",
+      photoId: "photo-local",
+      photoIds: ["photo-local"],
+      deletedPhotoIds: [],
+      deletedAt: null,
+    },
+    {
+      id: "plant-2",
+      photoId: "photo-remote",
+      photoIds: ["photo-remote"],
+      deletedPhotoIds: [],
+      deletedAt: null,
+    },
+  ] as never;
+
+  const remotePlants = [
+    {
+      id: "plant-1",
+      photoId: null,
+      photoIds: [],
+      deletedPhotoIds: [],
+      deletedAt: null,
+    },
+    {
+      id: "plant-2",
+      photoId: "photo-remote",
+      photoIds: ["photo-remote"],
+      deletedPhotoIds: [],
+      deletedAt: null,
+    },
+  ] as never;
+
+  assert.deepEqual(
+    findUnconfirmedPhotoReferences(localPlants, remotePlants),
+    [{ plantId: "plant-1", photoId: "photo-local" }],
+  );
+});
+
+test("does not require cloud photo metadata for deleted plants", () => {
+  const localPlants = [{
+    id: "deleted-plant",
+    photoId: "old-photo",
+    photoIds: ["old-photo"],
+    deletedPhotoIds: [],
+    deletedAt: "2026-10-01T10:00:00.000Z",
+  }] as never;
+
+  assert.deepEqual(
+    findUnconfirmedPhotoReferences(localPlants, []),
+    [],
+  );
 });
