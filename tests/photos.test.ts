@@ -10,6 +10,7 @@ import {
 } from "../src/features/garden/model/photoGallery.ts";
 import {
   classifyPhotoOwnership,
+  plantReferencesPhoto,
 } from "../worker/photos/photoRepository.ts";
 import {
   findDuplicatePhotoReferences,
@@ -404,5 +405,46 @@ test("server photo ownership hides whether an ID belongs to another user", () =>
       reason: "photo_id_conflict",
       message: "Не удалось сохранить фотографию из-за конфликта идентификатора.",
     },
+  );
+});
+
+
+test("server photo membership accepts the legacy primary photo when photo_ids is empty", () => {
+  assert.equal(
+    plantReferencesPhoto(
+      { photo_id: "legacy-photo", photo_ids: "[]" },
+      "legacy-photo",
+    ),
+    true,
+  );
+});
+
+test("server photo membership accepts a photo in the gallery list", () => {
+  assert.equal(
+    plantReferencesPhoto(
+      { photo_id: "primary-photo", photo_ids: '["primary-photo","gallery-photo"]' },
+      "gallery-photo",
+    ),
+    true,
+  );
+});
+
+test("server photo membership rejects an unrelated photo ID", () => {
+  assert.equal(
+    plantReferencesPhoto(
+      { photo_id: "primary-photo", photo_ids: '["primary-photo"]' },
+      "unrelated-photo",
+    ),
+    false,
+  );
+});
+
+test("server photo membership falls back to the legacy primary on malformed gallery JSON", () => {
+  assert.equal(
+    plantReferencesPhoto(
+      { photo_id: "legacy-photo", photo_ids: "not-json" },
+      "legacy-photo",
+    ),
+    true,
   );
 });
