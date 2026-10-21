@@ -9,6 +9,9 @@ import {
   buildPhotoGallery,
 } from "../src/features/garden/model/photoGallery.ts";
 import {
+  classifyPhotoOwnership,
+} from "../worker/photos/photoRepository.ts";
+import {
   findDuplicatePhotoReferences,
   findMissingPlantPhotoIds,
   findUnconfirmedPhotoReferences,
@@ -353,5 +356,53 @@ test("detects a photo UUID referenced by multiple active plants", () => {
   assert.deepEqual(
     findDuplicatePhotoReferences(plants),
     [{ photoId: "shared-photo", plantIds: ["plant-1", "plant-2"] }],
+  );
+});
+
+
+test("server photo ownership accepts a new ID", () => {
+  assert.equal(
+    classifyPhotoOwnership(null, "user-1", "plant-1"),
+    null,
+  );
+});
+
+test("server photo ownership accepts an id already belonging to the same user and plant", () => {
+  assert.equal(
+    classifyPhotoOwnership(
+      { user_id: "user-1", plant_id: "plant-1" },
+      "user-1",
+      "plant-1",
+    ),
+    null,
+  );
+});
+
+test("server photo ownership rejects reassignment to another plant", () => {
+  assert.deepEqual(
+    classifyPhotoOwnership(
+      { user_id: "user-1", plant_id: "plant-original" },
+      "user-1",
+      "plant-requested",
+    ),
+    {
+      reason: "photo_owned_by_another_plant",
+      message: "Фотография уже зарегистрирована за другим растением. Автоматическая перепривязка запрещена.",
+      currentPlantId: "plant-original",
+    },
+  );
+});
+
+test("server photo ownership hides whether an ID belongs to another user", () => {
+  assert.deepEqual(
+    classifyPhotoOwnership(
+      { user_id: "other-user", plant_id: "private-plant" },
+      "user-1",
+      "plant-1",
+    ),
+    {
+      reason: "photo_id_conflict",
+      message: "Не удалось сохранить фотографию из-за конфликта идентификатора.",
+    },
   );
 });
