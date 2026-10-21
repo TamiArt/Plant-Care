@@ -16,6 +16,7 @@ import {
 } from "./photos/syncPhotos";
 
 import {
+  findDuplicatePhotoReferences,
   findUnconfirmedPhotoReferences,
 } from "../model/photoSyncIntegrity";
 
@@ -81,6 +82,16 @@ export async function syncGarden(
   const mergedPlants = [
     ...mergedById.values(),
   ];
+
+  const duplicateReferences = findDuplicatePhotoReferences(mergedPlants);
+  if (duplicateReferences.length > 0) {
+    const details = duplicateReferences
+      .map(item => `${item.photoId} (растения ${item.plantIds.join(", ")})`)
+      .join("; ");
+    throw new Error(
+      `Обнаружены повторяющиеся ID фотографий в разных растениях: ${details}. Загрузка остановлена, чтобы не перепривязать фотографии автоматически.`,
+    );
+  }
 
   /*
    * Persist the merged gallery metadata before uploading any binary photo.
