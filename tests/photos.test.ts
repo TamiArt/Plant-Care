@@ -9,6 +9,7 @@ import {
   buildPhotoGallery,
 } from "../src/features/garden/model/photoGallery.ts";
 import {
+  findDuplicatePhotoReferences,
   findMissingPlantPhotoIds,
   findUnconfirmedPhotoReferences,
   getReferencedPlantPhotoIds,
@@ -323,5 +324,34 @@ test("does not require cloud photo metadata for deleted plants", () => {
   assert.deepEqual(
     findUnconfirmedPhotoReferences(localPlants, []),
     [],
+  );
+});
+
+
+test("detects a photo UUID referenced by multiple active plants", () => {
+  const plants = [
+    {
+      id: "plant-1",
+      photoId: "shared-photo",
+      photoIds: ["shared-photo"],
+      deletedAt: null,
+    },
+    {
+      id: "plant-2",
+      photoId: "shared-photo",
+      photoIds: ["shared-photo"],
+      deletedAt: null,
+    },
+    {
+      id: "deleted-plant",
+      photoId: "shared-photo",
+      photoIds: ["shared-photo"],
+      deletedAt: "2026-10-01T10:00:00.000Z",
+    },
+  ] as never;
+
+  assert.deepEqual(
+    findDuplicatePhotoReferences(plants),
+    [{ photoId: "shared-photo", plantIds: ["plant-1", "plant-2"] }],
   );
 });
