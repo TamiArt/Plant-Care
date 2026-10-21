@@ -6,6 +6,7 @@ import {
   deletePhoto,
   getOwnedPlant,
   getPhoto,
+  getPhotoMetadata,
   MAX_CLOUD_PHOTO_BYTES,
   savePhoto,
 } from "./photoRepository";
@@ -226,10 +227,35 @@ export async function handlePutPhoto(
   }
 
   /*
-   * Нельзя загрузить Blob под
-   * произвольным photoId.
-   *
-   * photoId должен входить в галерею растения.
+   * UUID фотографии глобально уникален в рамках пользователя.
+   * Не допускаем тихую перезапись/пропуск загрузки, если этот UUID
+   * уже зарегистрирован за другим растением.
+   */
+  const existingPhoto = await getPhotoMetadata(
+    env,
+    user.id,
+    photoId,
+  );
+
+  if (existingPhoto && existingPhoto.plant_id !== plantId) {
+    return json(
+      {
+        error:
+          "Фотография уже зарегистрирована за другим растением. Автоматическая перепривязка запрещена.",
+        reason: "photo_owned_by_another_plant",
+        photoId,
+        currentPlantId: existingPhoto.plant_id,
+        requestedPlantId: plantId,
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
+  /*
+   * Нельзя загрузить Blob под произвольным photoId.
+   * photoId должен входить в актуальную галерею растения.
    */
   if (
     !(() => {
