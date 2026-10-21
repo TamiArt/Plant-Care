@@ -15,6 +15,11 @@ import {
   syncPhotos,
 } from "./photos/syncPhotos";
 
+import {
+  findDuplicatePhotoReferences,
+  findUnconfirmedPhotoReferences,
+} from "../model/photoSyncIntegrity";
+
 /**
  * Выполняет полную сетевую синхронизацию.
  *
@@ -77,6 +82,38 @@ export async function syncGarden(
   const mergedPlants = [
     ...mergedById.values(),
   ];
+
+  const duplicateReferences = findDuplicatePhotoReferences(mergedPlants);
+  if (duplicateReferences.length > 0) {
+    const details = duplicateReferences
+      .map(item => `${item.photoId} (растения ${item.plantIds.join(", ")})`)
+      .join("; ");
+    throw new Error(
+      `Обнаружены повторяющиеся ID фотографий в разных растениях: ${details}. Загрузка остановлена, чтобы не перепривязать фотографии автоматически.`,
+    );
+  }
+
+  /*
+   * Persist the merged gallery metadata before uploading any binary photo.
+   * The first sync may have ignored an older local plant snapshot due to the
+   * server's Last Write Wins guard. Gallery merging can preserve local photo
+   * IDs that were therefore never acknowledged by the server; uploading
+   * before this second metadata pass causes a predictable HTTP 409.
+   */
+  const galleryResult = await syncPlantsWithCloud(mergedPlants);
+  const unconfirmed = findUnconfirmedPhotoReferences(
+    mergedPlants,
+    galleryResult.plants,
+  );
+
+  if (unconfirmed.length > 0) {
+    const details = unconfirmed
+      .map(item => `${item.photoId} (растение ${item.plantId})`)
+      .join(", ");
+    throw new Error(
+      `Сервер не подтвердил привязку ${unconfirmed.length} фотографий к растениям: ${details}. Бинарная загрузка остановлена, чтобы избежать HTTP 409.`,
+    );
+  }
 
   await syncPhotos(
     mergedPlants,

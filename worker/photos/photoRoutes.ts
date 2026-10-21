@@ -6,6 +6,8 @@ import {
   deletePhoto,
   getOwnedPlant,
   getPhoto,
+  classifyPhotoOwnership,
+  getPhotoMetadataById,
   MAX_CLOUD_PHOTO_BYTES,
   savePhoto,
 } from "./photoRepository";
@@ -226,10 +228,37 @@ export async function handlePutPhoto(
   }
 
   /*
-   * Нельзя загрузить Blob под
-   * произвольным photoId.
-   *
-   * photoId должен входить в галерею растения.
+   * UUID фотографии глобально уникален в рамках пользователя.
+   * Не допускаем тихую перезапись/пропуск загрузки, если этот UUID
+   * уже зарегистрирован за другим растением.
+   */
+  const existingPhoto = await getPhotoMetadataById(
+    env,
+    photoId,
+  );
+  const ownershipConflict = classifyPhotoOwnership(
+    existingPhoto,
+    user.id,
+    plantId,
+  );
+
+  if (ownershipConflict) {
+    return json(
+      {
+        error: ownershipConflict.message,
+        reason: ownershipConflict.reason,
+        photoId,
+        requestedPlantId: plantId,
+      },
+      {
+        status: 409,
+      },
+    );
+  }
+
+  /*
+   * Нельзя загрузить Blob под произвольным photoId.
+   * photoId должен входить в актуальную галерею растения.
    */
   if (
     !(() => {
@@ -305,7 +334,7 @@ export async function handlePutPhoto(
     );
   }
 
-  await savePhoto(
+  const saveResult = await savePhoto(
     env,
     {
       id:
@@ -326,6 +355,21 @@ export async function handlePutPhoto(
       updatedAt,
     },
   );
+
+  if (saveResult === "conflict") {
+    return json(
+      {
+        error:
+          "Состояние фотографии изменилось во время синхронизации. Повторите синхронизацию после проверки связей.",
+        reason: "photo_ownership_changed",
+        photoId,
+        requestedPlantId: plantId,
+      },
+      {
+        status: 409,
+      },
+    );
+  }
 
   return json({
     ok: true,
