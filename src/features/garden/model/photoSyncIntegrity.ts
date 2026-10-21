@@ -59,3 +59,31 @@ export function findUnconfirmedPhotoReferences(
 
   return conflicts;
 }
+
+
+/**
+ * A photo UUID must be referenced by at most one active plant. Detect
+ * duplicate references before writing metadata or uploading blobs.
+ */
+export function findDuplicatePhotoReferences(
+  plants: UserPlant[],
+): Array<{ photoId: string; plantIds: string[] }> {
+  const plantIdsByPhotoId = new Map<string, Set<string>>();
+
+  for (const plant of plants) {
+    if (plant.deletedAt !== null) continue;
+
+    for (const photoId of getPlantPhotoIds(plant)) {
+      const plantIds = plantIdsByPhotoId.get(photoId) ?? new Set<string>();
+      plantIds.add(plant.id);
+      plantIdsByPhotoId.set(photoId, plantIds);
+    }
+  }
+
+  return [...plantIdsByPhotoId.entries()]
+    .filter(([, plantIds]) => plantIds.size > 1)
+    .map(([photoId, plantIds]) => ({
+      photoId,
+      plantIds: [...plantIds],
+    }));
+}
