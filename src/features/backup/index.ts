@@ -8,4 +8,4 @@ export {
   parseBackup,
   serializeBackup,
 } from "./backup";
-export type { BackupTab, PlantCareBackup, PlantCareSettings } from "./backup";
+export type { BackupGlobalNote, BackupTab, PlantCareBackup, PlantCareSettings } from "./backup";
