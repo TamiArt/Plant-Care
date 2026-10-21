@@ -14,6 +14,7 @@ export type BackupTab =
   | "garden"
   | "catalog"
   | "checklist"
+  | "notes"
   | "add";
 
 export interface PlantCareSettings {
@@ -203,6 +204,7 @@ function normalizeSettings(
     "garden",
     "catalog",
     "checklist",
+    "notes",
     "add",
   ];
 
