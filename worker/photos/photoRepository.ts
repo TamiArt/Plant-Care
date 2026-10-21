@@ -94,6 +94,45 @@ export async function getPhotoMetadata(
  * photo cannot be mistaken for a new photo. Callers must not expose
  * the other user's metadata in API responses.
  */
+export type PhotoOwnershipConflict =
+  | {
+      reason: "photo_id_conflict";
+      message: string;
+    }
+  | {
+      reason: "photo_owned_by_another_plant";
+      message: string;
+      currentPlantId: string;
+    };
+
+export function classifyPhotoOwnership(
+  existingPhoto: Pick<PhotoMetadataRow, "user_id" | "plant_id"> | null,
+  userId: string,
+  plantId: string,
+): PhotoOwnershipConflict | null {
+  if (!existingPhoto) {
+    return null;
+  }
+
+  // Do not reveal whether another user's photo ID exists or expose its owner.
+  if (existingPhoto.user_id !== userId) {
+    return {
+      reason: "photo_id_conflict",
+      message: "Не удалось сохранить фотографию из-за конфликта идентификатора.",
+    };
+  }
+
+  if (existingPhoto.plant_id !== plantId) {
+    return {
+      reason: "photo_owned_by_another_plant",
+      message: "Фотография уже зарегистрирована за другим растением. Автоматическая перепривязка запрещена.",
+      currentPlantId: existingPhoto.plant_id,
+    };
+  }
+
+  return null;
+}
+
 export async function getPhotoMetadataById(
   env: PhotoEnv,
   photoId: string,
