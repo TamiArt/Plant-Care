@@ -34,7 +34,7 @@ export function UserPlantSheet({
   onMist: () => void;
   onFertilize: () => void;
   onMoveLocation: (loc: PlantLocation) => void;
-  onAddNote: (content: string) => void;
+  onAddNote: (content: string, eventDate: string) => void;
   onDeleteNote: (noteId: string) => void;
   onToggleNoteItem: (noteId: string, lineIndex: number) => void;
   onAddReminder: (title: string, date: string) => void;
@@ -50,6 +50,7 @@ export function UserPlantSheet({
   const reminders = Array.isArray(up.reminders) ? up.reminders : [];
   const [activeTab, setActiveTab] = useState<PlantTab>("care");
   const [noteText, setNoteText] = useState("");
+  const [noteDate, setNoteDate] = useState(todayStr());
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState(todayStr());
@@ -211,13 +212,16 @@ export function UserPlantSheet({
               <div className="space-y-3 pb-4">
                 <div className="bg-secondary rounded-2xl p-3">
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Новая заметка</p>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">Дата события
+                    <input type="date" value={noteDate} onChange={e => setNoteDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground outline-none" />
+                  </label>
                   <div className="mb-2 flex gap-2">
                     <button type="button" onClick={() => addNotePrefix("- ")} className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border"><List size={13} /> Маркер</button>
                     <button type="button" onClick={() => addNotePrefix("[ ] ")} className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-[11px] font-medium text-foreground border border-border"><CheckSquare size={13} /> Чекбокс</button>
                   </div>
-                  <textarea ref={noteInputRef} value={noteText} onChange={e => setNoteText(e.target.value)} placeholder={"Например:\n- Пересадить весной\n[ ] Купить горшок\nОтцвела 15 июня"} rows={4}
+                  <textarea ref={noteInputRef} value={noteText} onChange={e => setNoteText(e.target.value)} placeholder={"Например:\nОбработала от паутинного клеща, средство ...\nВнесла удобрение ...\nПересадила в грунт ..."} rows={4}
                     className="w-full bg-card rounded-xl px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground resize-none border border-border" />
-                  <button onClick={() => { if (noteText.trim()) { onAddNote(noteText.trim()); setNoteText(""); } }} disabled={!noteText.trim()}
+                  <button onClick={() => { if (noteText.trim()) { onAddNote(noteText.trim(), noteDate); setNoteText(""); setNoteDate(todayStr()); } }} disabled={!noteText.trim()}
                     className="mt-2 w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium disabled:opacity-40 flex items-center justify-center gap-1.5"><Plus size={13} /> Добавить заметку</button>
                 </div>
 
