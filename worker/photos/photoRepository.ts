@@ -18,6 +18,22 @@ import type {
 export const MAX_CLOUD_PHOTO_BYTES =
   400 * 1024;
 
+export function plantReferencesPhoto(
+  plant: Pick<PlantOwnershipRow, "photo_id" | "photo_ids">,
+  photoId: string,
+): boolean {
+  try {
+    const ids: unknown = JSON.parse(plant.photo_ids);
+    return (
+      Array.isArray(ids) &&
+      ids.includes(photoId)
+    ) || plant.photo_id === photoId;
+  } catch {
+    // Older records may only have the legacy primary photo field.
+    return plant.photo_id === photoId;
+  }
+}
+
 export async function getOwnedPlant(
   env: PhotoEnv,
   userId: string,
@@ -228,19 +244,25 @@ export async function savePhoto(
     existing &&
     (
       existing.user_id !== input.userId ||
-      existing.plant_id !== input.plantId
+      existing.plant_id !== input.plantId ||
+      existing.deleted_at !== null
     )
   ) {
+    /*
+     * Never revive a tombstoned photo implicitly. A stale local gallery
+     * must reconcile its metadata before it can upload this ID again.
+     */
     return "conflict";
   }
 
   /*
    * Если сервер уже имеет такую же
-   * или более новую версию —
+   * или более новую активную версию —
    * ничего не перезаписываем.
    */
   if (
     existing &&
+    existing.deleted_at === null &&
     existing.updated_at >=
       input.updatedAt
   ) {
@@ -353,7 +375,8 @@ export async function savePhoto(
   if (
     !persisted ||
     persisted.user_id !== input.userId ||
-    persisted.plant_id !== input.plantId
+    persisted.plant_id !== input.plantId ||
+    persisted.deleted_at !== null
   ) {
     return "conflict";
   }
