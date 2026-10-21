@@ -486,10 +486,11 @@ const {
                 { location }
               )
             }
-            onAddNote={(content) =>
+            onAddNote={(content, eventDate) =>
               garden.addNote(
                 liveDetail.id,
-                content
+                content,
+                eventDate
               )
             }
             onDeleteNote={(noteId) =>
