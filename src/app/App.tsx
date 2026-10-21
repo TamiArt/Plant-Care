@@ -666,6 +666,7 @@ const {
             "Вы вышли из аккаунта, но локальные данные не удалось очистить. Перезагрузите приложение и повторите выход.",
         };
       }
+      await globalCareNotes.replaceNotes([], "replace");
       setUserDetail(null);
       setEditTarget(null);
       setDeleteTarget(null);
