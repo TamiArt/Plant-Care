@@ -6,7 +6,8 @@ import {
   deletePhoto,
   getOwnedPlant,
   getPhoto,
-  getPhotoMetadata,
+  classifyPhotoOwnership,
+  getPhotoMetadataById,
   MAX_CLOUD_PHOTO_BYTES,
   savePhoto,
 } from "./photoRepository";
@@ -231,20 +232,22 @@ export async function handlePutPhoto(
    * Не допускаем тихую перезапись/пропуск загрузки, если этот UUID
    * уже зарегистрирован за другим растением.
    */
-  const existingPhoto = await getPhotoMetadata(
+  const existingPhoto = await getPhotoMetadataById(
     env,
-    user.id,
     photoId,
   );
+  const ownershipConflict = classifyPhotoOwnership(
+    existingPhoto,
+    user.id,
+    plantId,
+  );
 
-  if (existingPhoto && existingPhoto.plant_id !== plantId) {
+  if (ownershipConflict) {
     return json(
       {
-        error:
-          "Фотография уже зарегистрирована за другим растением. Автоматическая перепривязка запрещена.",
-        reason: "photo_owned_by_another_plant",
+        error: ownershipConflict.message,
+        reason: ownershipConflict.reason,
         photoId,
-        currentPlantId: existingPhoto.plant_id,
         requestedPlantId: plantId,
       },
       {
@@ -331,7 +334,7 @@ export async function handlePutPhoto(
     );
   }
 
-  await savePhoto(
+  const saveResult = await savePhoto(
     env,
     {
       id:
@@ -352,6 +355,21 @@ export async function handlePutPhoto(
       updatedAt,
     },
   );
+
+  if (saveResult === "conflict") {
+    return json(
+      {
+        error:
+          "Состояние фотографии изменилось во время синхронизации. Повторите синхронизацию после проверки связей.",
+        reason: "photo_ownership_changed",
+        photoId,
+        requestedPlantId: plantId,
+      },
+      {
+        status: 409,
+      },
+    );
+  }
 
   return json({
     ok: true,
