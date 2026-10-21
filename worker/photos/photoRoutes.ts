@@ -264,7 +264,10 @@ export async function handlePutPhoto(
     !(() => {
       try {
         const ids: unknown = JSON.parse(plant.photo_ids);
-        return Array.isArray(ids) && ids.includes(photoId);
+        return (
+          Array.isArray(ids) &&
+          ids.includes(photoId)
+        ) || plant.photo_id === photoId;
       } catch {
         return plant.photo_id === photoId;
       }
