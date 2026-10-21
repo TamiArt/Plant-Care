@@ -228,19 +228,25 @@ export async function savePhoto(
     existing &&
     (
       existing.user_id !== input.userId ||
-      existing.plant_id !== input.plantId
+      existing.plant_id !== input.plantId ||
+      existing.deleted_at !== null
     )
   ) {
+    /*
+     * Never revive a tombstoned photo implicitly. A stale local gallery
+     * must reconcile its metadata before it can upload this ID again.
+     */
     return "conflict";
   }
 
   /*
    * Если сервер уже имеет такую же
-   * или более новую версию —
+   * или более новую активную версию —
    * ничего не перезаписываем.
    */
   if (
     existing &&
+    existing.deleted_at === null &&
     existing.updated_at >=
       input.updatedAt
   ) {
@@ -353,7 +359,8 @@ export async function savePhoto(
   if (
     !persisted ||
     persisted.user_id !== input.userId ||
-    persisted.plant_id !== input.plantId
+    persisted.plant_id !== input.plantId ||
+    persisted.deleted_at !== null
   ) {
     return "conflict";
   }
