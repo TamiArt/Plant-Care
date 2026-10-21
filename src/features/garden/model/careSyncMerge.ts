@@ -162,6 +162,15 @@ export function mergeSyncedPlant(
       remote.fertilizingHistory,
     );
 
+  const mergedPhotoGallery = mergePhotoGallery(local, remote);
+  const basePhotoIds = normalizedPhotoIds(base);
+  const galleryChanged =
+    mergedPhotoGallery.photoIds.length !== basePhotoIds.length ||
+    mergedPhotoGallery.photoIds.some((id, index) => id !== basePhotoIds[index]) ||
+    mergedPhotoGallery.photoId !== base.photoId ||
+    mergedPhotoGallery.deletedPhotoIds.length !== (base.deletedPhotoIds ?? []).length ||
+    mergedPhotoGallery.deletedPhotoIds.some((id, index) => id !== (base.deletedPhotoIds ?? [])[index]);
+
   const historyChanged =
     !sameHistory(
       base.wateringHistory,
@@ -178,14 +187,11 @@ export function mergeSyncedPlant(
 
   return {
     ...base,
-    ...mergePhotoGallery(
-      local,
-      remote,
-    ),
+    ...mergedPhotoGallery,
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
-    updatedAt: historyChanged
+    updatedAt: historyChanged || galleryChanged
       ? mergedTimestamp(
           local.updatedAt,
           remote.updatedAt,
