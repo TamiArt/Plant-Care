@@ -845,6 +845,7 @@ export function useGarden() {
       (
         id: string,
         content: string,
+        eventDate: string = todayStr(),
       ) => {
         const note:
           PlantNote = {
@@ -852,7 +853,7 @@ export function useGarden() {
             createId(),
 
           createdAt:
-            todayStr(),
+            /^\\d{4}-\\d{2}-\\d{2}$/.test(eventDate) ? eventDate : todayStr(),
 
           content,
         };
