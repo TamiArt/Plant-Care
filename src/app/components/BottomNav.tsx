@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BookOpen, Home, ListChecks, Plus, Trees } from "lucide-react";
+import { BookOpen, Home, ListChecks, Plus, StickyNote, Trees } from "lucide-react";
 import type { Tab } from "../navigation";
 
 export interface BottomNavProps {
@@ -15,6 +15,7 @@ export function BottomNav({ active, onChange, homeCount, gardenCount }: BottomNa
     { id: "garden",    icon: <Trees size={20} />,     label: "Сад",      badge: gardenCount },
     { id: "catalog",   icon: <BookOpen size={20} />,  label: "Каталог" },
     { id: "checklist", icon: <ListChecks size={20} />,label: "Чек-лист" },
+    { id: "notes", icon: <StickyNote size={20} />, label: "Заметки" },
     { id: "add",       icon: <Plus size={22} />,      label: "Добавить" },
   ];
 
