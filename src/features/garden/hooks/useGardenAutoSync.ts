@@ -28,15 +28,15 @@ function lastSyncMetaKey(userId: string): string {
 }
 
 /**
- * Synchronization policy:
- * - the first authenticated app session always syncs immediately;
- * - the UI is not considered ready until that initial attempt finishes;
- * - later manual syncs remain available at any time;
- * - while the app stays open, a successful sync is refreshed periodically.
+ * Cross-device sync policy:
+ * - sync immediately after an authenticated session becomes ready;
+ * - retry periodically while the app remains open;
+ * - sync again when the app returns to the foreground or connectivity returns;
+ * - serialize concurrent requests and queue one follow-up pass if a trigger
+ *   fires during an active sync.
  *
- * The previous 24-hour gate was intentionally removed. It allowed a device
- * opened at 15:00 to continue using a stale local snapshot even when another
- * device had changed the same plant at 14:10.
+ * Local IndexedDB remains the offline source of truth. Cloud sync is not gated
+ * by a 24-hour marker because another device may have changed data at any time.
  */
 export function useGardenAutoSync({
   userId,
@@ -70,7 +70,6 @@ export function useGardenAutoSync({
     }
 
     runningRef.current = true;
-
     let result: AutoSyncResult = { ok: true };
 
     try {
@@ -157,6 +156,45 @@ export function useGardenAutoSync({
   }, [
     authLoading,
     gardenLoading,
+    initialSyncReady,
+    runSync,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (!canSync || !userId || !initialSyncReady) {
+      return;
+    }
+
+    // Keep foreground devices reasonably fresh without hammering the API.
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void runSync();
+      }
+    }, 15_000);
+
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void runSync();
+      }
+    };
+
+    const syncWhenOnline = () => {
+      void runSync();
+    };
+
+    window.addEventListener("focus", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("online", syncWhenOnline);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncWhenVisible);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.removeEventListener("online", syncWhenOnline);
+    };
+  }, [
+    canSync,
     initialSyncReady,
     runSync,
     userId,
