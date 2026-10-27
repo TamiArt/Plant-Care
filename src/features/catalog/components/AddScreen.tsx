@@ -176,6 +176,9 @@ export function AddScreen({
               Изображение уменьшено и будет сохранено как Blob
               в IndexedDB после добавления растения.
             </p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Автоматическое распознавание не используется: выберите растение из каталога или добавьте своё.
+            </p>
           </div>
         )}
 
