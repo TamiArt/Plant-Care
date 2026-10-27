@@ -1,0 +1,151 @@
+name: Staging D1 preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_remote_staging:
+        description: "Apply migrations to the dedicated staging D1 database and deploy the staging Worker"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plant-care-staging-d1
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate tests, build, and D1 migration chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests and production build
+        run: npm run check
+
+      - name: Apply the complete migration chain to isolated local D1
+        run: npx wrangler d1 migrations apply plantcare-db --local --config worker/wrangler.toml
+
+      - name: Verify local D1 migration status
+        run: npx wrangler d1 migrations list plantcare-db --local --config worker/wrangler.toml
+
+  staging:
+    name: Apply migrations and deploy isolated staging Worker
+    if: ${{ inputs.apply_remote_staging }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      STAGING_D1_DATABASE_ID: ${{ secrets.STAGING_D1_DATABASE_ID }}
+      STAGING_D1_DATABASE_NAME: ${{ secrets.STAGING_D1_DATABASE_NAME }}
+      STAGING_APP_ORIGIN: ${{ secrets.STAGING_APP_ORIGIN }}
+      STAGING_BETTER_AUTH_SECRET: ${{ secrets.STAGING_BETTER_AUTH_SECRET }}
+      STAGING_WORKER_URL: ${{ secrets.STAGING_WORKER_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fail closed unless all staging resources are explicitly configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID STAGING_D1_DATABASE_ID STAGING_D1_DATABASE_NAME STAGING_APP_ORIGIN STAGING_BETTER_AUTH_SECRET STAGING_WORKER_URL; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Required staging secret ${key} is not configured."
+              exit 1
+            fi
+          done
+
+          if [[ "$STAGING_D1_DATABASE_ID" == "55937f6a-40ff-4cc9-bb5d-1ae53031e289" ]]; then
+            echo "::error::The staging database ID matches the production database ID. Refusing to continue."
+            exit 1
+          fi
+
+          if [[ "$STAGING_D1_DATABASE_NAME" == "plantcare-db" ]]; then
+            echo "::error::The staging database name matches the production database name. Refusing to continue."
+            exit 1
+          fi
+
+          [[ "$STAGING_D1_DATABASE_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || { echo "::error::STAGING_D1_DATABASE_ID is not a UUID."; exit 1; }
+          [[ "$STAGING_D1_DATABASE_NAME" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "::error::STAGING_D1_DATABASE_NAME contains unsupported characters."; exit 1; }
+          [[ "$STAGING_APP_ORIGIN" =~ ^https://[^/]+$ ]] || { echo "::error::STAGING_APP_ORIGIN must be an HTTPS origin without a path."; exit 1; }
+          [[ "$STAGING_WORKER_URL" =~ ^https://[^/]+/?$ ]] || { echo "::error::STAGING_WORKER_URL must be an HTTPS origin without a path."; exit 1; }
+
+      - name: Generate a staging-only Wrangler configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > worker/wrangler.staging.generated.toml <<EOF
+          name = "plantcare-api-staging"
+          main = "index.ts"
+          compatibility_date = "2026-08-08"
+          compatibility_flags = ["nodejs_compat"]
+
+          [vars]
+          APP_ENV = "staging"
+          APP_ORIGIN = "$STAGING_APP_ORIGIN"
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "$STAGING_D1_DATABASE_NAME"
+          database_id = "$STAGING_D1_DATABASE_ID"
+          EOF
+
+      - name: Apply migrations to the dedicated staging database only
+        run: npx wrangler d1 migrations apply "$STAGING_D1_DATABASE_NAME" --remote --config worker/wrangler.staging.generated.toml
+
+      - name: Configure the staging-only authentication secret
+        shell: bash
+        run: printf '%s' "$STAGING_BETTER_AUTH_SECRET" | npx wrangler secret put BETTER_AUTH_SECRET --config worker/wrangler.staging.generated.toml
+
+      - name: Deploy the staging Worker
+        run: npx wrangler deploy --config worker/wrangler.staging.generated.toml
+
+      - name: Verify Worker and D1 health
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error "$STAGING_WORKER_URL/health")"
+          printf '%s' "$response" | node -e '
+            let body = "";
+            process.stdin.setEncoding("utf8");
+            process.stdin.on("data", chunk => body += chunk);
+            process.stdin.on("end", () => {
+              let result;
+              try { result = JSON.parse(body); } catch { console.error("Health endpoint returned invalid JSON"); process.exit(1); }
+              if (result.ok !== true || result.database !== true) {
+                console.error("Staging health check failed:", JSON.stringify({ ok: result.ok, database: result.database }));
+                process.exit(1);
+              }
+              console.log("Staging Worker and D1 health check passed.");
+            });
+          '
+
+      - name: Remove generated staging configuration
+        if: always()
+        run: rm -f worker/wrangler.staging.generated.toml
