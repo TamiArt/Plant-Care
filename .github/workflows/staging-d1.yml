@@ -119,12 +119,12 @@ jobs:
       - name: Apply migrations to the dedicated staging database only
         run: npx wrangler d1 migrations apply "$STAGING_D1_DATABASE_NAME" --remote --config worker/wrangler.staging.generated.toml
 
+      - name: Deploy the staging Worker
+        run: npx wrangler deploy --config worker/wrangler.staging.generated.toml
+
       - name: Configure the staging-only authentication secret
         shell: bash
         run: printf '%s' "$STAGING_BETTER_AUTH_SECRET" | npx wrangler secret put BETTER_AUTH_SECRET --config worker/wrangler.staging.generated.toml
-
-      - name: Deploy the staging Worker
-        run: npx wrangler deploy --config worker/wrangler.staging.generated.toml
 
       - name: Verify Worker and D1 health
         shell: bash
