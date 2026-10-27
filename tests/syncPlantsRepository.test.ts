@@ -48,8 +48,12 @@ test("plant UPSERT cannot clear an existing deletion tombstone", () => {
 
   assert.match(
     query,
-    /deleted_at\s*=\s*CASE\s+WHEN plants\.deleted_at IS NOT NULL THEN plants\.deleted_at\s+ELSE excluded\.deleted_at\s+END/s,
+    /deleted_at\s*=\s*CASE\s+WHEN plants\.deleted_at IS NOT NULL\s+AND\s+\(\s+excluded\.deleted_at IS NULL\s+OR plants\.deleted_at >= excluded\.deleted_at\s+\)\s+THEN plants\.deleted_at\s+ELSE excluded\.deleted_at\s+END/s,
   );
+
+  // A later deletion timestamp may replace an earlier tombstone, but NULL may not clear it.
+  assert.match(query, /excluded\.deleted_at IS NULL/);
+  assert.match(query, /plants\.deleted_at >= excluded\.deleted_at/);
 
   // Preserve row ownership and last-write-wins guards in the same UPSERT.
   assert.match(
