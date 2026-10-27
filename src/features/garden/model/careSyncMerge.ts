@@ -15,34 +15,6 @@ function mergeHistory(
   ].sort();
 }
 
-function sameHistory(
-  first: string[],
-  second: string[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (value, index) =>
-        value === second[index],
-    )
-  );
-}
-
-function mergedTimestamp(
-  first: string,
-  second: string,
-): string {
-  const latest = Math.max(
-    Date.now(),
-    Date.parse(first),
-    Date.parse(second),
-  );
-
-  return new Date(
-    latest + 1,
-  ).toISOString();
-}
-
 function normalizedPhotoIds(
   plant: UserPlant,
 ): string[] {
@@ -56,6 +28,7 @@ function normalizedPhotoIds(
 
   if (
     plant.photoId &&
+    !deleted.has(plant.photoId) &&
     !ids.includes(plant.photoId)
   ) {
     ids.unshift(plant.photoId);
@@ -80,7 +53,7 @@ function mergePhotoGallery(
       ...(local.deletedPhotoIds ?? []),
       ...(remote.deletedPhotoIds ?? []),
     ]),
-  ];
+  ].sort();
 
   const localIds = normalizedPhotoIds(local);
   const remoteIds = normalizedPhotoIds(remote);
@@ -110,14 +83,17 @@ function mergePhotoGallery(
       ? remote.photoId
       : local.photoId;
 
+  // A primary-photo selection is a local UI preference that may not
+  // change updatedAt independently. Preserve it when its photo remains in
+  // the merged gallery; otherwise fall back to the selected base snapshot.
   const primaryPhotoId =
-    basePrimary &&
-    mergedIds.includes(basePrimary)
-      ? basePrimary
-      : otherPrimary &&
-          mergedIds.includes(otherPrimary)
-        ? otherPrimary
-        : mergedIds[0] ?? null;
+    local.photoId && mergedIds.includes(local.photoId)
+      ? local.photoId
+      : basePrimary && mergedIds.includes(basePrimary)
+        ? basePrimary
+        : otherPrimary && mergedIds.includes(otherPrimary)
+          ? otherPrimary
+          : mergedIds[0] ?? null;
 
   return {
     photoIds: mergedIds,
@@ -139,10 +115,27 @@ export function mergeSyncedPlant(
   local: UserPlant,
   remote: UserPlant,
 ): UserPlant {
+  // A soft-delete tombstone is authoritative. A stale device may have
+  // a skewed/future updatedAt; it must not resurrect a deleted plant.
+  const localIsDeleted = typeof local.deletedAt === "string";
+  const remoteIsDeleted = typeof remote.deletedAt === "string";
+  // If both snapshots are deleted, use the later tombstone's metadata.
+  // A single tombstone still wins over an active snapshot with a skewed clock.
+  const deletionTombstone =
+    localIsDeleted && remoteIsDeleted
+      ? Date.parse(local.deletedAt!) > Date.parse(remote.deletedAt!)
+        ? local
+        : remote
+      : localIsDeleted
+        ? local
+        : remoteIsDeleted
+          ? remote
+          : null;
   const base =
-    local.updatedAt > remote.updatedAt
+    deletionTombstone ??
+    (local.updatedAt > remote.updatedAt
       ? local
-      : remote;
+      : remote);
 
   const wateringHistory =
     mergeHistory(
@@ -163,39 +156,20 @@ export function mergeSyncedPlant(
     );
 
   const mergedPhotoGallery = mergePhotoGallery(local, remote);
-  const basePhotoIds = normalizedPhotoIds(base);
-  const galleryChanged =
-    mergedPhotoGallery.photoIds.length !== basePhotoIds.length ||
-    mergedPhotoGallery.photoIds.some((id, index) => id !== basePhotoIds[index]) ||
-    mergedPhotoGallery.photoId !== base.photoId ||
-    mergedPhotoGallery.deletedPhotoIds.length !== (base.deletedPhotoIds ?? []).length ||
-    mergedPhotoGallery.deletedPhotoIds.some((id, index) => id !== (base.deletedPhotoIds ?? [])[index]);
-
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
-
   return {
     ...base,
     ...mergedPhotoGallery,
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
-    updatedAt: historyChanged || galleryChanged
-      ? mergedTimestamp(
-          local.updatedAt,
-          remote.updatedAt,
-        )
+    // Merging append-only history/gallery is not a user edit. Do not
+    // manufacture a newer timestamp that could promote stale metadata.
+    updatedAt: deletionTombstone
+      ? new Date(Math.max(
+          Date.parse(local.updatedAt),
+          Date.parse(remote.updatedAt),
+          Date.parse(deletionTombstone.deletedAt!),
+        )).toISOString()
       : base.updatedAt,
   };
 }

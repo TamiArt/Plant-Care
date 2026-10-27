@@ -3,6 +3,8 @@ import {
   type AuthEnv,
 } from "./auth";
 import {
+  hasAllCareHistory,
+  hasAllPhotoTombstones,
   mergeCareHistoryPlant,
 } from "./syncMerge";
 import {
@@ -191,61 +193,102 @@ export async function handleSyncPlants(
     user,
   );
 
-  const remotePlants =
-    await getPlantsForUser(
-      env.DB,
-      user.id,
-    );
-  const remoteById =
-    new Map(
-      remotePlants.map(
-        plant => [
-          plant.id,
-          plant,
-        ],
-      ),
-    );
-  const serverNow =
-    new Date().toISOString();
+  /*
+   * A concurrent request can update a row after we read it but before the
+   * guarded UPSERT runs. In that case SQL correctly protects newer metadata,
+   * but it may also reject this request's appended care-history events.
+   * Re-read and merge a bounded number of times; never silently report sync
+   * success while an incoming care event is still missing from persisted data.
+   */
+  const maxAttempts = 3;
 
-  const plantsToPersist =
-    plants.map(plant => {
-      const remote =
-        remoteById.get(plant.id);
-
-      return remote
-        ? mergeCareHistoryPlant(
-            remote,
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const remotePlants =
+      await getPlantsForUser(
+        env.DB,
+        user.id,
+      );
+    const remoteById =
+      new Map(
+        remotePlants.map(
+          plant => [
+            plant.id,
             plant,
-            serverNow,
-          )
-        : plant;
-    });
+          ],
+        ),
+      );
+    const serverNow =
+      new Date().toISOString();
 
-  if (
-    plantsToPersist.length > 0
-  ) {
-    await env.DB.batch(
-      plantsToPersist.map(
-        plant =>
-          createPlantUpsert(
-            env.DB,
-            user.id,
-            plant,
-          ),
-      ),
-    );
+    const plantsToPersist =
+      plants.map(plant => {
+        const remote =
+          remoteById.get(plant.id);
+
+        return remote
+          ? mergeCareHistoryPlant(
+              remote,
+              plant,
+              serverNow,
+            )
+          : plant;
+      });
+
+    if (plantsToPersist.length > 0) {
+      await env.DB.batch(
+        plantsToPersist.map(
+          plant =>
+            createPlantUpsert(
+              env.DB,
+              user.id,
+              plant,
+            ),
+        ),
+      );
+    }
+
+    const persistedPlants =
+      await getPlantsForUser(
+        env.DB,
+        user.id,
+      );
+    const persistedById =
+      new Map(
+        persistedPlants.map(
+          plant => [plant.id, plant],
+        ),
+      );
+
+    const syncStateIsComplete =
+      plantsToPersist.every(candidate => {
+        const persisted =
+          persistedById.get(candidate.id);
+
+        return persisted !== undefined &&
+          hasAllCareHistory(
+            persisted,
+            candidate,
+          ) &&
+          hasAllPhotoTombstones(
+            persisted,
+            candidate,
+          );
+      });
+
+    if (syncStateIsComplete) {
+      return json({
+        plants: persistedPlants,
+        syncedAt:
+          new Date().toISOString(),
+      });
+    }
   }
 
-  const mergedPlants =
-    await getPlantsForUser(
-      env.DB,
-      user.id,
-    );
-
-  return json({
-    plants: mergedPlants,
-    syncedAt:
-      new Date().toISOString(),
-  });
+  return json(
+    {
+      error: "Не удалось завершить синхронизацию истории ухода и удалённых фотографий из-за параллельных изменений. Повторите попытку.",
+      retryable: true,
+    },
+    { status: 409 },
+  );
 }

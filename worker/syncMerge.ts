@@ -25,28 +25,6 @@ function mergeHistory(
   ].sort();
 }
 
-function sameHistory(
-  first: string[],
-  second: string[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (value, index) =>
-        value === second[index],
-    )
-  );
-}
-
-function latestTimestamp(
-  first: string,
-  second: string,
-): string {
-  return first >= second
-    ? first
-    : second;
-}
-
 function normalizedPhotoIds(
   plant: CareHistoryPlant,
 ): string[] {
@@ -65,6 +43,7 @@ function normalizedPhotoIds(
   if (
     typeof plant.photoId === "string" &&
     plant.photoId &&
+    !deleted.has(plant.photoId) &&
     !ids.includes(plant.photoId)
   ) {
     ids.unshift(plant.photoId);
@@ -90,7 +69,7 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
       ...(Array.isArray(remote.deletedPhotoIds) ? remote.deletedPhotoIds : []),
       ...(Array.isArray(incoming.deletedPhotoIds) ? incoming.deletedPhotoIds : []),
     ]),
-  ].filter(id => typeof id === "string" && id.length > 0));
+  ].filter(id => typeof id === "string" && id.length > 0).sort();
 
   const incomingIds = normalizedPhotoIds(incoming);
   const remoteIds = normalizedPhotoIds(remote);
@@ -142,12 +121,33 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
 export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
   remote: T,
   incoming: T,
-  serverNow: string,
+  _serverNow: string,
 ): T {
+  // On equal client timestamps, prefer the persisted server version. This
+  // avoids letting a concurrent request with the same millisecond timestamp
+  // win ordinary metadata solely because it arrived as the incoming payload.
+  // Soft-delete tombstones are authoritative: a stale device with a
+  // clock-skewed timestamp must not resurrect a deleted plant.
+  const incomingIsDeleted = typeof incoming.deletedAt === "string";
+  const remoteIsDeleted = typeof remote.deletedAt === "string";
+  // If both snapshots are deleted, keep the one carrying the later deletion
+  // timestamp as the metadata base. If only one is deleted, its tombstone wins
+  // regardless of the active snapshot's (possibly skewed) updatedAt.
+  const deletionTombstone =
+    incomingIsDeleted && remoteIsDeleted
+      ? Date.parse(incoming.deletedAt as string) > Date.parse(remote.deletedAt as string)
+        ? incoming
+        : remote
+      : incomingIsDeleted
+        ? incoming
+        : remoteIsDeleted
+          ? remote
+          : null;
   const base =
-    incoming.updatedAt >= remote.updatedAt
+    deletionTombstone ??
+    (incoming.updatedAt > remote.updatedAt
       ? incoming
-      : remote;
+      : remote);
 
   const wateringHistory = mergeHistory(
     remote.wateringHistory,
@@ -162,20 +162,6 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     incoming.fertilizingHistory,
   );
 
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
-
   return {
     ...base,
     ...mergePhotoGallery(
@@ -185,8 +171,60 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
-    updatedAt: historyChanged
-      ? latestTimestamp(serverNow, base.updatedAt)
+    // Merging an append-only care history must not make stale ordinary
+    // metadata look newer than it really is. The database upsert uses this
+    // timestamp to decide whether incoming metadata may replace stored data.
+    // Advancing it to serverNow here could let an old nickname/location/etc.
+    // overwrite a concurrent edit merely because it carried an extra history entry.
+    updatedAt: deletionTombstone
+      ? new Date(Math.max(
+          Date.parse(incoming.updatedAt),
+          Date.parse(remote.updatedAt),
+          Date.parse(deletionTombstone.deletedAt as string),
+        )).toISOString()
       : base.updatedAt,
   };
 }
+
+
+/**
+ * Returns true when the persisted record contains every append-only care
+ * event from the incoming snapshot. Used to detect a concurrent write that
+ * caused the SQL last-write-wins guard to reject this request's snapshot.
+ */
+export function hasAllCareHistory(
+  persisted: CareHistoryPlant,
+  incoming: CareHistoryPlant,
+): boolean {
+  const containsAll = (stored: string[], received: string[]) =>
+    received.every(value => stored.includes(value));
+
+  return (
+    containsAll(persisted.wateringHistory, incoming.wateringHistory) &&
+    containsAll(persisted.mistingHistory, incoming.mistingHistory) &&
+    containsAll(persisted.fertilizingHistory, incoming.fertilizingHistory)
+  );
+}
+
+/**
+ * Returns true when persisted gallery metadata contains every deletion
+ * tombstone from the candidate snapshot. A concurrent UPSERT can otherwise
+ * replace the JSON array and silently drop a photo deletion.
+ */
+export function hasAllPhotoTombstones(
+  persisted: CareHistoryPlant,
+  candidate: CareHistoryPlant,
+): boolean {
+  const stored = new Set(
+    Array.isArray(persisted.deletedPhotoIds)
+      ? persisted.deletedPhotoIds
+      : [],
+  );
+
+  return (
+    Array.isArray(candidate.deletedPhotoIds)
+      ? candidate.deletedPhotoIds.every(id => stored.has(id))
+      : true
+  );
+}
+

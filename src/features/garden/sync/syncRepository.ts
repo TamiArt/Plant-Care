@@ -62,25 +62,26 @@ function normalizePhotoGallery(
       )
     : [];
 
-  const uniqueIds = [
-    ...new Set(ids),
-  ].slice(0, 3);
+  const uniqueIds = [...new Set(ids)];
 
+  // A stale primary photo must not override a deletion tombstone.
   if (
     photoId &&
+    !deletedPhotoIds.includes(photoId) &&
     !uniqueIds.includes(photoId)
   ) {
     uniqueIds.unshift(photoId);
   }
 
+  const boundedIds = uniqueIds.slice(0, 3);
+
   return {
-    photoIds: uniqueIds,
+    photoIds: boundedIds,
     deletedPhotoIds,
     photoId:
-      photoId &&
-      uniqueIds.includes(photoId)
+      photoId && boundedIds.includes(photoId)
         ? photoId
-        : uniqueIds[0] ?? null,
+        : boundedIds[0] ?? null,
   };
 }
 
@@ -307,33 +308,52 @@ async function readError(
 export async function syncPlantsWithCloud(
   localPlants: UserPlant[],
 ): Promise<CloudSyncResult> {
-  const response =
-    await fetch(
+  let response: Response | undefined;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    response = await fetch(
       `${API_BASE_URL}/sync/plants`,
       {
         method: "POST",
-
-        credentials:
-          "include",
-
+        credentials: "include",
         headers: {
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
-
-        body:
-          JSON.stringify({
-            plants:
-              localPlants,
-          }),
+        body: JSON.stringify({
+          plants: localPlants,
+        }),
       },
     );
 
-  if (!response.ok) {
+    if (response.status !== 409 || attempt === 2) {
+      break;
+    }
+
+    let retryableConflict = false;
+    try {
+      const conflictBody: unknown = await response.clone().json();
+      retryableConflict =
+        isRecord(conflictBody) &&
+        conflictBody.retryable === true;
+    } catch {
+      // Non-JSON or non-retryable conflicts are handled below.
+    }
+
+    if (!retryableConflict) {
+      break;
+    }
+
+    // Give concurrent writes a short chance to settle before retrying.
+    await new Promise(resolve =>
+      setTimeout(resolve, 150 * (attempt + 1)),
+    );
+  }
+
+  if (!response || !response.ok) {
     throw new Error(
-      await readError(
-        response,
-      ),
+      response
+        ? await readError(response)
+        : "Синхронизация не была выполнена.",
     );
   }
 

@@ -110,23 +110,27 @@ function normalizePhotoGallery(
         id => id.length > 0 && !deletedPhotoIds.includes(id),
       ),
     ),
-  ].slice(0, 3);
+  ];
 
+  // Tombstones are authoritative even if a stale payload still points at the
+  // deleted photo as its primary image.
   if (
     photoId &&
+    !deletedPhotoIds.includes(photoId) &&
     !ids.includes(photoId)
   ) {
     ids.unshift(photoId);
   }
 
+  const boundedIds = ids.slice(0, 3);
+
   return {
-    photoIds: ids,
+    photoIds: boundedIds,
     deletedPhotoIds,
     photoId:
-      photoId &&
-      ids.includes(photoId)
+      photoId && boundedIds.includes(photoId)
         ? photoId
-        : ids[0] ?? null,
+        : boundedIds[0] ?? null,
   };
 }
 
@@ -279,7 +283,17 @@ export function createPlantUpsert(db: D1Database, userId: string, plant: SyncPla
       external_taxon = excluded.external_taxon,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
-      deleted_at = excluded.deleted_at
+      -- Soft-delete tombstones are irreversible during sync: an active
+      -- snapshot from an offline device must never clear a persisted deletion.
+      deleted_at = CASE
+        WHEN plants.deleted_at IS NOT NULL
+          AND (
+            excluded.deleted_at IS NULL
+            OR plants.deleted_at >= excluded.deleted_at
+          )
+          THEN plants.deleted_at
+        ELSE excluded.deleted_at
+      END
     WHERE plants.user_id = excluded.user_id
       AND excluded.updated_at >= plants.updated_at
   `).bind(

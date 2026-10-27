@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  hasAllCareHistory,
+  hasAllPhotoTombstones,
   mergeCareHistoryPlant,
 } from "../worker/syncMerge.ts";
 
@@ -356,7 +358,7 @@ test(
     ]);
     assert.deepEqual(
       result.deletedPhotoIds,
-      ["photo-3", "photo-1"],
+      ["photo-1", "photo-3"],
     );
   },
 );
@@ -388,5 +390,274 @@ test(
       "photo-4",
     ]);
     assert.equal(result.photoId, "photo-4");
+  },
+);
+
+
+test(
+  "merging care history does not promote stale metadata to server time",
+  () => {
+    const remote = plant({
+      nickname: "Имя с сервера",
+      updatedAt: "2026-08-17T12:00:00.000Z",
+      wateringHistory: ["2026-08-01"],
+    });
+    const incoming = plant({
+      nickname: "Устаревшее локальное имя",
+      updatedAt: "2026-08-17T11:00:00.000Z",
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T12:30:00.000Z",
+    );
+
+    assert.equal(result.nickname, "Имя с сервера");
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+    assert.equal(result.updatedAt, remote.updatedAt);
+  },
+);
+
+
+test(
+  "detects care history missing after a concurrent sync write",
+  () => {
+    const persisted = plant({
+      wateringHistory: ["2026-08-01"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: [],
+    });
+    const incoming = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+
+    assert.equal(hasAllCareHistory(persisted, incoming), false);
+  },
+);
+
+test(
+  "accepts persisted care history that contains every incoming event",
+  () => {
+    const persisted = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10", "2026-08-16"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+    const incoming = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+
+    assert.equal(hasAllCareHistory(persisted, incoming), true);
+  },
+);
+
+
+test(
+  "prefers persisted metadata when client timestamps are equal",
+  () => {
+    const timestamp = "2026-08-17T12:00:00.000Z";
+    const remote = plant({
+      nickname: "Имя с сервера",
+      updatedAt: timestamp,
+    });
+    const incoming = plant({
+      nickname: "Имя из параллельного запроса",
+      updatedAt: timestamp,
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T12:00:01.000Z",
+    );
+
+    assert.equal(result.nickname, "Имя с сервера");
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+    assert.equal(result.updatedAt, timestamp);
+  },
+);
+
+
+test(
+  "does not restore a tombstoned primary photo from a stale snapshot",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2"],
+      deletedPhotoIds: [],
+    });
+    const incoming = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2"],
+      deletedPhotoIds: ["photo-1"],
+      updatedAt: "2026-08-18T10:00:00.000Z",
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-18T10:01:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, ["photo-2"]);
+    assert.deepEqual(result.deletedPhotoIds, ["photo-1"]);
+    assert.equal(result.photoId, "photo-2");
+  },
+);
+
+
+test(
+  "does not resurrect a deleted plant when an active snapshot has a newer clock",
+  () => {
+    const remote = plant({
+      nickname: "Удалённое растение",
+      updatedAt: "2026-08-17T12:00:00.000Z",
+      deletedAt: "2026-08-17T12:00:00.000Z",
+    });
+    const incoming = plant({
+      nickname: "Устаревшее активное растение",
+      updatedAt: "2026-10-01T12:00:00.000Z",
+      deletedAt: null,
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-10-01T12:00:01.000Z",
+    );
+
+    assert.equal(result.deletedAt, remote.deletedAt);
+    assert.equal(result.nickname, remote.nickname);
+    assert.equal(result.updatedAt, incoming.updatedAt);
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+  },
+);
+
+test(
+  "uses deletion time rather than skewed update time to select a tombstone",
+  () => {
+    const remote = plant({
+      nickname: "Удалено раньше",
+      updatedAt: "2026-08-22T10:00:00.000Z",
+      deletedAt: "2026-08-20T10:00:00.000Z",
+    });
+    const incoming = plant({
+      nickname: "Удалено позже с часами назад",
+      updatedAt: "2026-08-19T10:00:00.000Z",
+      deletedAt: "2026-08-21T10:00:00.000Z",
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-23T10:00:00.000Z",
+    );
+
+    assert.equal(result.deletedAt, incoming.deletedAt);
+    assert.equal(result.nickname, incoming.nickname);
+    assert.equal(result.updatedAt, remote.updatedAt);
+  },
+);
+
+test(
+  "prefers the latest deletion tombstone when both snapshots are deleted",
+  () => {
+    const remote = plant({
+      nickname: "Удалено раньше",
+      updatedAt: "2026-08-20T10:00:00.000Z",
+      deletedAt: "2026-08-20T10:00:00.000Z",
+      wateringHistory: ["2026-08-01"],
+    });
+    const incoming = plant({
+      nickname: "Удалено позже",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+      deletedAt: "2026-08-21T10:00:00.000Z",
+      wateringHistory: ["2026-08-01", "2026-08-21"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-22T10:00:00.000Z",
+    );
+
+    assert.equal(result.deletedAt, incoming.deletedAt);
+    assert.equal(result.nickname, incoming.nickname);
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-21"]);
+  },
+);
+
+test(
+  "detects photo deletion tombstones lost by a concurrent sync write",
+  () => {
+    const persisted = plant({
+      deletedPhotoIds: ["photo-a"],
+    });
+    const candidate = plant({
+      deletedPhotoIds: ["photo-a", "photo-b"],
+    });
+
+    assert.equal(hasAllPhotoTombstones(persisted, candidate), false);
+    assert.equal(
+      hasAllPhotoTombstones(
+        plant({ deletedPhotoIds: ["photo-a", "photo-b", "photo-c"] }),
+        candidate,
+      ),
+      true,
+    );
+  },
+);
+
+test(
+  "converges when two devices delete different photos from the same gallery",
+  () => {
+    const serverSnapshot = plant({
+      photoId: "photo-c",
+      photoIds: ["photo-a", "photo-b", "photo-c"],
+      deletedPhotoIds: ["photo-a"],
+      updatedAt: "2026-08-17T12:00:00.000Z",
+    });
+    const secondDevice = plant({
+      photoId: "photo-a",
+      photoIds: ["photo-a", "photo-b", "photo-c"],
+      deletedPhotoIds: ["photo-b"],
+      updatedAt: "2026-08-17T12:00:00.000Z",
+    });
+
+    const firstMerge = mergeCareHistoryPlant(
+      serverSnapshot,
+      secondDevice,
+      "2026-08-17T12:00:01.000Z",
+    );
+    const reverseMerge = mergeCareHistoryPlant(
+      secondDevice,
+      serverSnapshot,
+      "2026-08-17T12:00:01.000Z",
+    );
+
+    assert.deepEqual(firstMerge.deletedPhotoIds, ["photo-a", "photo-b"]);
+    assert.deepEqual(reverseMerge.deletedPhotoIds, ["photo-a", "photo-b"]);
+    assert.deepEqual(firstMerge.deletedPhotoIds, reverseMerge.deletedPhotoIds);
+    assert.deepEqual(firstMerge.photoIds, ["photo-c"]);
+    assert.deepEqual(reverseMerge.photoIds, ["photo-c"]);
+    assert.equal(firstMerge.photoId, "photo-c");
+    assert.equal(reverseMerge.photoId, "photo-c");
+
+    // A subsequent sync pass must keep both deletion tombstones and remain stable.
+    const converged = mergeCareHistoryPlant(
+      firstMerge,
+      reverseMerge,
+      "2026-08-17T12:00:02.000Z",
+    );
+    assert.deepEqual(new Set(converged.deletedPhotoIds), new Set(["photo-a", "photo-b"]));
+    assert.deepEqual(converged.photoIds, ["photo-c"]);
   },
 );

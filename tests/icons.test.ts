@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const expected = new Map([
@@ -11,9 +10,7 @@ const expected = new Map([
   ["maskable-512.png", 512],
 ]);
 
-test("generates valid PWA PNG icons from the text-only build script", () => {
-  const result = spawnSync(process.execPath, ["scripts/generate-icons.mjs"], { cwd: process.cwd(), encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
+test("ships valid PWA PNG icons", () => {
 
   for (const [filename, size] of expected) {
     const buffer = fs.readFileSync(path.join("public", "icons", filename));

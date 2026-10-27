@@ -236,7 +236,7 @@ export function createBackup(
     plants,
     globalNotes: globalNotes.filter(note =>
       typeof note.id === "string" &&
-      typeof note.date === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(note.date) &&
+      typeof note.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(note.date) &&
       typeof note.content === "string" &&
       typeof note.createdAt === "string" &&
       typeof note.updatedAt === "string",
@@ -320,7 +320,7 @@ export function parseBackup(
             isRecord(item) &&
             typeof item.id === "string" &&
             typeof item.date === "string" &&
-            /^\\d{4}-\\d{2}-\\d{2}$/.test(item.date) &&
+            /^\d{4}-\d{2}-\d{2}$/.test(item.date) &&
             typeof item.content === "string" &&
             typeof item.createdAt === "string" &&
             typeof item.updatedAt === "string",
