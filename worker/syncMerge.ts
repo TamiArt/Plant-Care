@@ -128,12 +128,21 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
   // win ordinary metadata solely because it arrived as the incoming payload.
   // Soft-delete tombstones are authoritative: a stale device with a
   // clock-skewed timestamp must not resurrect a deleted plant.
+  const incomingIsDeleted = typeof incoming.deletedAt === "string";
+  const remoteIsDeleted = typeof remote.deletedAt === "string";
+  // If both snapshots are deleted, keep the one carrying the later deletion
+  // timestamp as the metadata base. If only one is deleted, its tombstone wins
+  // regardless of the active snapshot's (possibly skewed) updatedAt.
   const deletionTombstone =
-    typeof incoming.deletedAt === "string"
-      ? incoming
-      : typeof remote.deletedAt === "string"
-        ? remote
-        : null;
+    incomingIsDeleted && remoteIsDeleted
+      ? Date.parse(incoming.deletedAt as string) > Date.parse(remote.deletedAt as string)
+        ? incoming
+        : remote
+      : incomingIsDeleted
+        ? incoming
+        : remoteIsDeleted
+          ? remote
+          : null;
   const base =
     deletionTombstone ??
     (incoming.updatedAt > remote.updatedAt
