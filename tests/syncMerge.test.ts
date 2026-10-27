@@ -510,3 +510,32 @@ test(
     assert.equal(result.photoId, "photo-2");
   },
 );
+
+
+test(
+  "does not resurrect a deleted plant when an active snapshot has a newer clock",
+  () => {
+    const remote = plant({
+      nickname: "Удалённое растение",
+      updatedAt: "2026-08-17T12:00:00.000Z",
+      deletedAt: "2026-08-17T12:00:00.000Z",
+    });
+    const incoming = plant({
+      nickname: "Устаревшее активное растение",
+      updatedAt: "2026-10-01T12:00:00.000Z",
+      deletedAt: null,
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-10-01T12:00:01.000Z",
+    );
+
+    assert.equal(result.deletedAt, remote.deletedAt);
+    assert.equal(result.nickname, remote.nickname);
+    assert.equal(result.updatedAt, incoming.updatedAt);
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+  },
+);
