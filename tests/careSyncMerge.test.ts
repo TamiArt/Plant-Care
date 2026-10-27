@@ -88,6 +88,25 @@ test("local photo merge never reinserts a tombstoned primary photo", () => {
   assert.deepEqual(result.deletedPhotoIds, ["photo-deleted"]);
 });
 
+test("local sync merge selects the latest tombstone even when its update clock is older", () => {
+  const local = plant({
+    nickname: "Удалено позже с часами назад",
+    updatedAt: "2026-08-19T10:00:00.000Z",
+    deletedAt: "2026-08-21T10:00:00.000Z",
+  });
+  const remote = plant({
+    nickname: "Удалено раньше",
+    updatedAt: "2026-08-22T10:00:00.000Z",
+    deletedAt: "2026-08-20T10:00:00.000Z",
+  });
+
+  const result = mergeSyncedPlant(local, remote);
+
+  assert.equal(result.deletedAt, local.deletedAt);
+  assert.equal(result.nickname, local.nickname);
+  assert.equal(result.updatedAt, remote.updatedAt);
+});
+
 test("local sync merge prefers the latest tombstone when both snapshots are deleted", () => {
   const local = plant({
     nickname: "Удалено раньше",
