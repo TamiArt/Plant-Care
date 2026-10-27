@@ -126,10 +126,19 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
   // On equal client timestamps, prefer the persisted server version. This
   // avoids letting a concurrent request with the same millisecond timestamp
   // win ordinary metadata solely because it arrived as the incoming payload.
-  const base =
-    incoming.updatedAt > remote.updatedAt
+  // Soft-delete tombstones are authoritative: a stale device with a
+  // clock-skewed timestamp must not resurrect a deleted plant.
+  const deletionTombstone =
+    typeof incoming.deletedAt === "string"
       ? incoming
-      : remote;
+      : typeof remote.deletedAt === "string"
+        ? remote
+        : null;
+  const base =
+    deletionTombstone ??
+    (incoming.updatedAt > remote.updatedAt
+      ? incoming
+      : remote);
 
   const wateringHistory = mergeHistory(
     remote.wateringHistory,
@@ -158,7 +167,13 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     // timestamp to decide whether incoming metadata may replace stored data.
     // Advancing it to serverNow here could let an old nickname/location/etc.
     // overwrite a concurrent edit merely because it carried an extra history entry.
-    updatedAt: base.updatedAt,
+    updatedAt: deletionTombstone
+      ? new Date(Math.max(
+          Date.parse(incoming.updatedAt),
+          Date.parse(remote.updatedAt),
+          Date.parse(deletionTombstone.deletedAt as string),
+        )).toISOString()
+      : base.updatedAt,
   };
 }
 
