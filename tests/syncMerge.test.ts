@@ -455,3 +455,30 @@ test(
     assert.equal(hasAllCareHistory(persisted, incoming), true);
   },
 );
+
+
+test(
+  "prefers persisted metadata when client timestamps are equal",
+  () => {
+    const timestamp = "2026-08-17T12:00:00.000Z";
+    const remote = plant({
+      nickname: "Имя с сервера",
+      updatedAt: timestamp,
+    });
+    const incoming = plant({
+      nickname: "Имя из параллельного запроса",
+      updatedAt: timestamp,
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T12:00:01.000Z",
+    );
+
+    assert.equal(result.nickname, "Имя с сервера");
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+    assert.equal(result.updatedAt, timestamp);
+  },
+);
