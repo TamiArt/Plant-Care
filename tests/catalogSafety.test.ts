@@ -14,7 +14,7 @@ test("uploaded photo is forwarded into both plant creation flows", () => {
   const addScreen = readFileSync("src/features/catalog/components/AddScreen.tsx", "utf8");
   const customModal = readFileSync("src/features/garden/components/CustomPlantModal.tsx", "utf8");
 
-  assert.match(addScreen, /onSelectCatalog(plant, photo)/);
+  assert.match(addScreen, /onSelectCatalog\\(plant, photo\\)/);
   assert.match(addScreen, /onAddCustom\(photo\)/);
-  assert.match(customModal, /useState<string \|useState<PreparedPhoto | null>(initialPhoto)/);
+  assert.match(customModal, /useState<PreparedPhoto \\| null>\\(initialPhoto\\)/);
 });
