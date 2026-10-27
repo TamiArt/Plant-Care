@@ -62,25 +62,26 @@ function normalizePhotoGallery(
       )
     : [];
 
-  const uniqueIds = [
-    ...new Set(ids),
-  ].slice(0, 3);
+  const uniqueIds = [...new Set(ids)];
 
+  // A stale primary photo must not override a deletion tombstone.
   if (
     photoId &&
+    !deletedPhotoIds.includes(photoId) &&
     !uniqueIds.includes(photoId)
   ) {
     uniqueIds.unshift(photoId);
   }
 
+  const boundedIds = uniqueIds.slice(0, 3);
+
   return {
-    photoIds: uniqueIds,
+    photoIds: boundedIds,
     deletedPhotoIds,
     photoId:
-      photoId &&
-      uniqueIds.includes(photoId)
+      photoId && boundedIds.includes(photoId)
         ? photoId
-        : uniqueIds[0] ?? null,
+        : boundedIds[0] ?? null,
   };
 }
 
