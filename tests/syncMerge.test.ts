@@ -539,3 +539,32 @@ test(
     assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
   },
 );
+
+test(
+  "prefers the latest deletion tombstone when both snapshots are deleted",
+  () => {
+    const remote = plant({
+      nickname: "Удалено раньше",
+      updatedAt: "2026-08-20T10:00:00.000Z",
+      deletedAt: "2026-08-20T10:00:00.000Z",
+      wateringHistory: ["2026-08-01"],
+    });
+    const incoming = plant({
+      nickname: "Удалено позже",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+      deletedAt: "2026-08-21T10:00:00.000Z",
+      wateringHistory: ["2026-08-01", "2026-08-21"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-22T10:00:00.000Z",
+    );
+
+    assert.equal(result.deletedAt, incoming.deletedAt);
+    assert.equal(result.nickname, incoming.nickname);
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-21"]);
+  },
+);
+
