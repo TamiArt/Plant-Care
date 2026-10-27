@@ -50,4 +50,10 @@ test("plant UPSERT cannot clear an existing deletion tombstone", () => {
     query,
     /deleted_at\s*=\s*CASE\s+WHEN plants\.deleted_at IS NOT NULL THEN plants\.deleted_at\s+ELSE excluded\.deleted_at\s+END/s,
   );
+
+  // Preserve row ownership and last-write-wins guards in the same UPSERT.
+  assert.match(
+    query,
+    /WHERE plants\\.user_id = excluded\\.user_id\\s+AND excluded\\.updated_at >= plants\\.updated_at/s,
+  );
 });
