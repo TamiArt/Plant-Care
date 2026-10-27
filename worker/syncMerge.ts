@@ -43,6 +43,7 @@ function normalizedPhotoIds(
   if (
     typeof plant.photoId === "string" &&
     plant.photoId &&
+    !deleted.has(plant.photoId) &&
     !ids.includes(plant.photoId)
   ) {
     ids.unshift(plant.photoId);
