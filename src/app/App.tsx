@@ -247,6 +247,21 @@ const {
     },
     [garden, requireAuthForAdd],
   );
+  const handleWater = useCallback(
+    async (plantId: string) => {
+      const result = await garden.waterPlant(plantId);
+
+      // Persist the local watering event first, then push it immediately.
+      // If the network sync fails, the existing periodic retry remains active.
+      if (result.ok && auth.isAuthenticated) {
+        void syncNow();
+      }
+
+      return result;
+    },
+    [garden.waterPlant, auth.isAuthenticated, syncNow],
+  );
+
   const sharedScreenProps = {
     seasonLabel:
       getSeasonLabel(
@@ -256,7 +271,7 @@ const {
       resolvePlantPresentation,
     onWater:
       (plant: UserPlant) =>
-        garden.waterPlant(plant.id),
+        handleWater(plant.id),
     onMist:
       (id: string) =>
         garden.mistPlant(id),
@@ -472,9 +487,7 @@ const {
               setDeleteTarget(liveDetail)
             }
             onWater={() =>
-              garden.waterPlant(
-                liveDetail.id
-              )
+              handleWater(liveDetail.id)
             }
             onMist={() =>
               garden.mistPlant(
