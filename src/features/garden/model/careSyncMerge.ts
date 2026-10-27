@@ -53,7 +53,7 @@ function mergePhotoGallery(
       ...(local.deletedPhotoIds ?? []),
       ...(remote.deletedPhotoIds ?? []),
     ]),
-  ];
+  ].sort();
 
   const localIds = normalizedPhotoIds(local);
   const remoteIds = normalizedPhotoIds(remote);
