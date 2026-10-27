@@ -69,7 +69,7 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
       ...(Array.isArray(remote.deletedPhotoIds) ? remote.deletedPhotoIds : []),
       ...(Array.isArray(incoming.deletedPhotoIds) ? incoming.deletedPhotoIds : []),
     ]),
-  ].filter(id => typeof id === "string" && id.length > 0);
+  ].filter(id => typeof id === "string" && id.length > 0).sort();
 
   const incomingIds = normalizedPhotoIds(incoming);
   const remoteIds = normalizedPhotoIds(remote);
