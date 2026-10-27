@@ -184,3 +184,44 @@ test("SQLite-backed UPSERT keeps a deletion tombstone against a future-dated sta
     sqlite.close();
   }
 });
+
+test("SQLite migrations support photo deletion tombstones in the photo table", async () => {
+  const sqlite = new DatabaseSync(":memory:");
+  try {
+    applyMigrations(sqlite);
+    const columns = sqlite.prepare("PRAGMA table_info(plant_photos)").all() as Array<{ name: string }>;
+    assert.ok(columns.some(column => column.name === "deleted_at"));
+
+    const db = new SqliteD1Adapter(sqlite) as unknown as D1Database;
+    sqlite.prepare(
+      "INSERT INTO app_users (id, email, created_at, updated_at) VALUES (?, ?, ?, ?)",
+    ).run("user-1", "user@example.test", "2026-10-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z");
+
+    const active = plant();
+    db.batch([createPlantUpsert(db, "user-1", active)]);
+    sqlite.prepare(`
+      INSERT INTO plant_photos (
+        id, user_id, plant_id, photo_blob, mime_type, width, height,
+        byte_size, created_at, updated_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+    `).run(
+      "photo-live", "user-1", "plant-1", new Uint8Array([1]),
+      "image/webp", 1, 1, 1, active.updatedAt, active.updatedAt,
+    );
+
+    const removed = plant({
+      photoId: null,
+      photoIds: [],
+      deletedPhotoIds: ["photo-live"],
+      updatedAt: "2026-10-27T10:01:00.000Z",
+    });
+    db.batch([createPlantUpsert(db, "user-1", removed)]);
+
+    const photo = sqlite.prepare(
+      "SELECT deleted_at FROM plant_photos WHERE id = ?",
+    ).get("photo-live") as { deleted_at: string | null };
+    assert.equal(photo.deleted_at, removed.updatedAt);
+  } finally {
+    sqlite.close();
+  }
+});
