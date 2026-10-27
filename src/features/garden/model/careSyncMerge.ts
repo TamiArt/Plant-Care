@@ -83,14 +83,17 @@ function mergePhotoGallery(
       ? remote.photoId
       : local.photoId;
 
+  // A primary-photo selection is a local UI preference that may not
+  // change updatedAt independently. Preserve it when its photo remains in
+  // the merged gallery; otherwise fall back to the selected base snapshot.
   const primaryPhotoId =
-    basePrimary &&
-    mergedIds.includes(basePrimary)
-      ? basePrimary
-      : otherPrimary &&
-          mergedIds.includes(otherPrimary)
-        ? otherPrimary
-        : mergedIds[0] ?? null;
+    local.photoId && mergedIds.includes(local.photoId)
+      ? local.photoId
+      : basePrimary && mergedIds.includes(basePrimary)
+        ? basePrimary
+        : otherPrimary && mergedIds.includes(otherPrimary)
+          ? otherPrimary
+          : mergedIds[0] ?? null;
 
   return {
     photoIds: mergedIds,
