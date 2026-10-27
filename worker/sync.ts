@@ -4,6 +4,7 @@ import {
 } from "./auth";
 import {
   hasAllCareHistory,
+  hasAllPhotoTombstones,
   mergeCareHistoryPlant,
 } from "./syncMerge";
 import {
@@ -258,19 +259,23 @@ export async function handleSyncPlants(
         ),
       );
 
-    const careHistoryIsComplete =
-      plants.every(incoming => {
+    const syncStateIsComplete =
+      plantsToPersist.every(candidate => {
         const persisted =
-          persistedById.get(incoming.id);
+          persistedById.get(candidate.id);
 
         return persisted !== undefined &&
           hasAllCareHistory(
             persisted,
-            incoming,
+            candidate,
+          ) &&
+          hasAllPhotoTombstones(
+            persisted,
+            candidate,
           );
       });
 
-    if (careHistoryIsComplete) {
+    if (syncStateIsComplete) {
       return json({
         plants: persistedPlants,
         syncedAt:
