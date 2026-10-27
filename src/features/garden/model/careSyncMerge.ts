@@ -28,21 +28,6 @@ function sameHistory(
   );
 }
 
-function mergedTimestamp(
-  first: string,
-  second: string,
-): string {
-  const latest = Math.max(
-    Date.now(),
-    Date.parse(first),
-    Date.parse(second),
-  );
-
-  return new Date(
-    latest + 1,
-  ).toISOString();
-}
-
 function normalizedPhotoIds(
   plant: UserPlant,
 ): string[] {
@@ -56,6 +41,7 @@ function normalizedPhotoIds(
 
   if (
     plant.photoId &&
+    !deleted.has(plant.photoId) &&
     !ids.includes(plant.photoId)
   ) {
     ids.unshift(plant.photoId);
@@ -139,10 +125,19 @@ export function mergeSyncedPlant(
   local: UserPlant,
   remote: UserPlant,
 ): UserPlant {
-  const base =
-    local.updatedAt > remote.updatedAt
+  // A soft-delete tombstone is authoritative. A stale device may have
+  // a skewed/future updatedAt; it must not resurrect a deleted plant.
+  const deletionTombstone =
+    local.deletedAt !== null
       ? local
-      : remote;
+      : remote.deletedAt !== null
+        ? remote
+        : null;
+  const base =
+    deletionTombstone ??
+    (local.updatedAt > remote.updatedAt
+      ? local
+      : remote);
 
   const wateringHistory =
     mergeHistory(
@@ -191,11 +186,12 @@ export function mergeSyncedPlant(
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
-    updatedAt: historyChanged || galleryChanged
-      ? mergedTimestamp(
-          local.updatedAt,
-          remote.updatedAt,
-        )
+    // Merging append-only history/gallery is not a user edit. Do not
+    // manufacture a newer timestamp that could promote stale metadata.
+    updatedAt: deletionTombstone
+      ? (deletionTombstone.deletedAt && deletionTombstone.deletedAt > base.updatedAt
+          ? deletionTombstone.deletedAt
+          : base.updatedAt)
       : base.updatedAt,
   };
 }
