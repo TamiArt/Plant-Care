@@ -358,7 +358,7 @@ test(
     ]);
     assert.deepEqual(
       result.deletedPhotoIds,
-      ["photo-3", "photo-1"],
+      ["photo-1", "photo-3"],
     );
   },
 );
