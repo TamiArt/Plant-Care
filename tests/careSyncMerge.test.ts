@@ -125,3 +125,23 @@ test("local sync merge prefers the latest tombstone when both snapshots are dele
   assert.equal(result.nickname, remote.nickname);
 });
 
+test("client sync merge sorts photo deletion tombstones deterministically", () => {
+  const local = plant({
+    deletedPhotoIds: ["photo-z", "photo-a"],
+  });
+  const remote = plant({
+    deletedPhotoIds: ["photo-m", "photo-b"],
+    updatedAt: "2026-08-18T10:00:00.000Z",
+  });
+
+  const forward = mergeSyncedPlant(local, remote);
+  const reverse = mergeSyncedPlant(remote, local);
+
+  assert.deepEqual(forward.deletedPhotoIds, [
+    "photo-a",
+    "photo-b",
+    "photo-m",
+    "photo-z",
+  ]);
+  assert.deepEqual(reverse.deletedPhotoIds, forward.deletedPhotoIds);
+});
