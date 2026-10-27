@@ -157,3 +157,23 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     updatedAt: base.updatedAt,
   };
 }
+
+
+/**
+ * Returns true when the persisted record contains every append-only care
+ * event from the incoming snapshot. Used to detect a concurrent write that
+ * caused the SQL last-write-wins guard to reject this request's snapshot.
+ */
+export function hasAllCareHistory(
+  persisted: CareHistoryPlant,
+  incoming: CareHistoryPlant,
+): boolean {
+  const containsAll = (stored: string[], received: string[]) =>
+    received.every(value => stored.includes(value));
+
+  return (
+    containsAll(persisted.wateringHistory, incoming.wateringHistory) &&
+    containsAll(persisted.mistingHistory, incoming.mistingHistory) &&
+    containsAll(persisted.fertilizingHistory, incoming.fertilizingHistory)
+  );
+}
