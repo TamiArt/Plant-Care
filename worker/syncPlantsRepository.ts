@@ -283,7 +283,12 @@ export function createPlantUpsert(db: D1Database, userId: string, plant: SyncPla
       external_taxon = excluded.external_taxon,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
-      deleted_at = excluded.deleted_at
+      -- Soft-delete tombstones are irreversible during sync: an active
+      -- snapshot from an offline device must never clear a persisted deletion.
+      deleted_at = CASE
+        WHEN plants.deleted_at IS NOT NULL THEN plants.deleted_at
+        ELSE excluded.deleted_at
+      END
     WHERE plants.user_id = excluded.user_id
       AND excluded.updated_at >= plants.updated_at
   `).bind(
