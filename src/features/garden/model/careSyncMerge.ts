@@ -15,19 +15,6 @@ function mergeHistory(
   ].sort();
 }
 
-function sameHistory(
-  first: string[],
-  second: string[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (value, index) =>
-        value === second[index],
-    )
-  );
-}
-
 function normalizedPhotoIds(
   plant: UserPlant,
 ): string[] {
@@ -128,9 +115,9 @@ export function mergeSyncedPlant(
   // A soft-delete tombstone is authoritative. A stale device may have
   // a skewed/future updatedAt; it must not resurrect a deleted plant.
   const deletionTombstone =
-    local.deletedAt !== null
+    typeof local.deletedAt === "string"
       ? local
-      : remote.deletedAt !== null
+      : typeof remote.deletedAt === "string"
         ? remote
         : null;
   const base =
@@ -158,28 +145,6 @@ export function mergeSyncedPlant(
     );
 
   const mergedPhotoGallery = mergePhotoGallery(local, remote);
-  const basePhotoIds = normalizedPhotoIds(base);
-  const galleryChanged =
-    mergedPhotoGallery.photoIds.length !== basePhotoIds.length ||
-    mergedPhotoGallery.photoIds.some((id, index) => id !== basePhotoIds[index]) ||
-    mergedPhotoGallery.photoId !== base.photoId ||
-    mergedPhotoGallery.deletedPhotoIds.length !== (base.deletedPhotoIds ?? []).length ||
-    mergedPhotoGallery.deletedPhotoIds.some((id, index) => id !== (base.deletedPhotoIds ?? [])[index]);
-
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
-
   return {
     ...base,
     ...mergedPhotoGallery,
@@ -189,9 +154,11 @@ export function mergeSyncedPlant(
     // Merging append-only history/gallery is not a user edit. Do not
     // manufacture a newer timestamp that could promote stale metadata.
     updatedAt: deletionTombstone
-      ? (deletionTombstone.deletedAt && deletionTombstone.deletedAt > base.updatedAt
-          ? deletionTombstone.deletedAt
-          : base.updatedAt)
+      ? new Date(Math.max(
+          Date.parse(local.updatedAt),
+          Date.parse(remote.updatedAt),
+          Date.parse(deletionTombstone.deletedAt!),
+        )).toISOString()
       : base.updatedAt,
   };
 }
