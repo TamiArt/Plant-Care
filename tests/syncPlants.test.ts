@@ -23,7 +23,7 @@ test("server normalization keeps the primary photo inside the complete gallery",
   assert.equal(result.photoId, "photo-3");
 });
 
-test("server normalization removes duplicate photo IDs without truncating the gallery", () => {
+test("server normalization removes duplicate photo IDs and enforces the gallery limit", () => {
   const result = normalizeSyncPlant({
     id: "plant-1",
     nickname: "Монстера",
@@ -44,8 +44,6 @@ test("server normalization removes duplicate photo IDs without truncating the ga
     "photo-1",
     "photo-2",
     "photo-3",
-    "photo-4",
-    "photo-5",
   ]);
 });
 
