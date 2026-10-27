@@ -541,6 +541,32 @@ test(
 );
 
 test(
+  "uses deletion time rather than skewed update time to select a tombstone",
+  () => {
+    const remote = plant({
+      nickname: "Удалено раньше",
+      updatedAt: "2026-08-22T10:00:00.000Z",
+      deletedAt: "2026-08-20T10:00:00.000Z",
+    });
+    const incoming = plant({
+      nickname: "Удалено позже с часами назад",
+      updatedAt: "2026-08-19T10:00:00.000Z",
+      deletedAt: "2026-08-21T10:00:00.000Z",
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-23T10:00:00.000Z",
+    );
+
+    assert.equal(result.deletedAt, incoming.deletedAt);
+    assert.equal(result.nickname, incoming.nickname);
+    assert.equal(result.updatedAt, remote.updatedAt);
+  },
+);
+
+test(
   "prefers the latest deletion tombstone when both snapshots are deleted",
   () => {
     const remote = plant({
