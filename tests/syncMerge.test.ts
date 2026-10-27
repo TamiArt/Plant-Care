@@ -482,3 +482,31 @@ test(
     assert.equal(result.updatedAt, timestamp);
   },
 );
+
+
+test(
+  "does not restore a tombstoned primary photo from a stale snapshot",
+  () => {
+    const remote = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2"],
+      deletedPhotoIds: [],
+    });
+    const incoming = plant({
+      photoId: "photo-1",
+      photoIds: ["photo-1", "photo-2"],
+      deletedPhotoIds: ["photo-1"],
+      updatedAt: "2026-08-18T10:00:00.000Z",
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-18T10:01:00.000Z",
+    );
+
+    assert.deepEqual(result.photoIds, ["photo-2"]);
+    assert.deepEqual(result.deletedPhotoIds, ["photo-1"]);
+    assert.equal(result.photoId, "photo-2");
+  },
+);
