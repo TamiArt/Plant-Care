@@ -644,7 +644,8 @@ test(
     );
 
     assert.deepEqual(firstMerge.deletedPhotoIds, ["photo-a", "photo-b"]);
-    assert.deepEqual(reverseMerge.deletedPhotoIds, ["photo-b", "photo-a"]);
+    assert.deepEqual(reverseMerge.deletedPhotoIds, ["photo-a", "photo-b"]);
+    assert.deepEqual(firstMerge.deletedPhotoIds, reverseMerge.deletedPhotoIds);
     assert.deepEqual(firstMerge.photoIds, ["photo-c"]);
     assert.deepEqual(reverseMerge.photoIds, ["photo-c"]);
     assert.equal(firstMerge.photoId, "photo-c");
