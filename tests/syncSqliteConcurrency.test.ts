@@ -101,7 +101,7 @@ function applyMigrations(database: DatabaseSync) {
   }
 }
 
-test("SQLite-backed UPSERT and retry preserve concurrent care events and photo tombstones", () => {
+test("SQLite-backed UPSERT and retry preserve concurrent care events and photo tombstones", async () => {
   const sqlite = new DatabaseSync(":memory:");
   try {
     applyMigrations(sqlite);
@@ -124,9 +124,8 @@ test("SQLite-backed UPSERT and retry preserve concurrent care events and photo t
       photoIds: ["photo-live"],
       deletedPhotoIds: ["photo-deleted-b"],
     });
-    const staleRemote = (awaitPlants => awaitPlants)(getPlantsForUser(db, "user-1"));
-    return staleRemote.then(async initialRows => {
-      const sharedSnapshot = initialRows[0];
+    const initialRows = await getPlantsForUser(db, "user-1");
+    const sharedSnapshot = initialRows[0];
       const candidateA = mergeCareHistoryPlant(sharedSnapshot, deviceA, "2026-10-27T10:01:00.000Z");
       const candidateB = mergeCareHistoryPlant(sharedSnapshot, deviceB, "2026-10-27T10:02:00.000Z");
 
@@ -149,8 +148,7 @@ test("SQLite-backed UPSERT and retry preserve concurrent care events and photo t
       assert.equal(hasAllCareHistory(persisted, deviceA), true);
       assert.equal(hasAllCareHistory(persisted, deviceB), true);
       assert.equal(hasAllPhotoTombstones(persisted, deviceA), true);
-      assert.equal(hasAllPhotoTombstones(persisted, deviceB), true);
-    });
+    assert.equal(hasAllPhotoTombstones(persisted, deviceB), true);
   } finally {
     sqlite.close();
   }
