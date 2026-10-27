@@ -110,23 +110,27 @@ function normalizePhotoGallery(
         id => id.length > 0 && !deletedPhotoIds.includes(id),
       ),
     ),
-  ].slice(0, 3);
+  ];
 
+  // Tombstones are authoritative even if a stale payload still points at the
+  // deleted photo as its primary image.
   if (
     photoId &&
+    !deletedPhotoIds.includes(photoId) &&
     !ids.includes(photoId)
   ) {
     ids.unshift(photoId);
   }
 
+  const boundedIds = ids.slice(0, 3);
+
   return {
-    photoIds: ids,
+    photoIds: boundedIds,
     deletedPhotoIds,
     photoId:
-      photoId &&
-      ids.includes(photoId)
+      photoId && boundedIds.includes(photoId)
         ? photoId
-        : ids[0] ?? null,
+        : boundedIds[0] ?? null,
   };
 }
 
