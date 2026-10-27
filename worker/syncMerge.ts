@@ -205,3 +205,26 @@ export function hasAllCareHistory(
     containsAll(persisted.fertilizingHistory, incoming.fertilizingHistory)
   );
 }
+
+/**
+ * Returns true when persisted gallery metadata contains every deletion
+ * tombstone from the candidate snapshot. A concurrent UPSERT can otherwise
+ * replace the JSON array and silently drop a photo deletion.
+ */
+export function hasAllPhotoTombstones(
+  persisted: CareHistoryPlant,
+  candidate: CareHistoryPlant,
+): boolean {
+  const stored = new Set(
+    Array.isArray(persisted.deletedPhotoIds)
+      ? persisted.deletedPhotoIds
+      : [],
+  );
+
+  return (
+    Array.isArray(candidate.deletedPhotoIds)
+      ? candidate.deletedPhotoIds.every(id => stored.has(id))
+      : true
+  );
+}
+
