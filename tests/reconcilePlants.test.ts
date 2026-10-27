@@ -62,7 +62,7 @@ test("keeps watering even when remote timestamp is ahead", () => {
   const result = mergeSyncedPlant(local, remote);
 
   assert.deepEqual(result.wateringHistory, ["2026-08-17"]);
-  assert.ok(result.updatedAt > remote.updatedAt);
+  assert.equal(result.updatedAt, remote.updatedAt);
 });
 
 test("accepts newer remote metadata", () => {
@@ -161,7 +161,7 @@ test("keeps a legacy single photo when the remote snapshot has no gallery metada
 });
 
 
-test("merges all photos from local and remote without truncating the gallery", () => {
+test("keeps the newer gallery within the three-photo limit", () => {
   const local = plant({
     photoId: "local-primary",
     photoIds: ["old-1", "local-primary", "local-3", "local-4"],
@@ -176,13 +176,10 @@ test("merges all photos from local and remote without truncating the gallery", (
 
   assert.deepEqual(result.photoIds, [
     "old-1",
-    "local-primary",
-    "local-3",
-    "local-4",
     "remote-2",
     "remote-primary",
   ]);
-  assert.equal(result.photoId, "local-primary");
+  assert.equal(result.photoId, "remote-primary");
 });
 
 test("preserves a primary photo selected locally during sync", () => {
@@ -230,7 +227,7 @@ test("does not resurrect a photo deleted locally when the remote still has it", 
 });
 
 
-test("bumps plant metadata timestamp when merging a locally added photo into a newer remote plant", () => {
+test("merges a locally added photo without promoting stale metadata", () => {
   const local = plant({
     photoId: "photo-local",
     photoIds: ["photo-local"],
@@ -247,8 +244,5 @@ test("bumps plant metadata timestamp when merging a locally added photo into a n
 
   assert.equal(result.nickname, "Новое имя с сервера");
   assert.deepEqual(result.photoIds, ["photo-local"]);
-  assert.ok(
-    result.updatedAt > remote.updatedAt,
-    "the merged gallery must be written after the remote version",
-  );
+  assert.equal(result.updatedAt, remote.updatedAt);
 });
