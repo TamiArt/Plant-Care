@@ -38,15 +38,6 @@ function sameHistory(
   );
 }
 
-function latestTimestamp(
-  first: string,
-  second: string,
-): string {
-  return first >= second
-    ? first
-    : second;
-}
-
 function normalizedPhotoIds(
   plant: CareHistoryPlant,
 ): string[] {
@@ -142,7 +133,7 @@ function mergePhotoGallery<T extends CareHistoryPlant>(
 export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
   remote: T,
   incoming: T,
-  serverNow: string,
+  _serverNow: string,
 ): T {
   const base =
     incoming.updatedAt >= remote.updatedAt
@@ -185,8 +176,11 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     wateringHistory,
     mistingHistory,
     fertilizingHistory,
-    updatedAt: historyChanged
-      ? latestTimestamp(serverNow, base.updatedAt)
-      : base.updatedAt,
+    // Merging an append-only care history must not make stale ordinary
+    // metadata look newer than it really is. The database upsert uses this
+    // timestamp to decide whether incoming metadata may replace stored data.
+    // Advancing it to serverNow here could let an old nickname/location/etc.
+    // overwrite a concurrent edit merely because it carried an extra history entry.
+    updatedAt: base.updatedAt,
   };
 }
