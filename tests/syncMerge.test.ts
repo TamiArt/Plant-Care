@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   hasAllCareHistory,
+  hasAllPhotoTombstones,
   mergeCareHistoryPlant,
 } from "../worker/syncMerge.ts";
 
@@ -591,6 +592,27 @@ test(
     assert.equal(result.deletedAt, incoming.deletedAt);
     assert.equal(result.nickname, incoming.nickname);
     assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-21"]);
+  },
+);
+
+test(
+  "detects photo deletion tombstones lost by a concurrent sync write",
+  () => {
+    const persisted = plant({
+      deletedPhotoIds: ["photo-a"],
+    });
+    const candidate = plant({
+      deletedPhotoIds: ["photo-a", "photo-b"],
+    });
+
+    assert.equal(hasAllPhotoTombstones(persisted, candidate), false);
+    assert.equal(
+      hasAllPhotoTombstones(
+        plant({ deletedPhotoIds: ["photo-a", "photo-b", "photo-c"] }),
+        candidate,
+      ),
+      true,
+    );
   },
 );
 
