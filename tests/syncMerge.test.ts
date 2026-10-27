@@ -616,3 +616,47 @@ test(
   },
 );
 
+test(
+  "converges when two devices delete different photos from the same gallery",
+  () => {
+    const serverSnapshot = plant({
+      photoId: "photo-c",
+      photoIds: ["photo-a", "photo-b", "photo-c"],
+      deletedPhotoIds: ["photo-a"],
+      updatedAt: "2026-08-17T12:00:00.000Z",
+    });
+    const secondDevice = plant({
+      photoId: "photo-a",
+      photoIds: ["photo-a", "photo-b", "photo-c"],
+      deletedPhotoIds: ["photo-b"],
+      updatedAt: "2026-08-17T12:00:00.000Z",
+    });
+
+    const firstMerge = mergeCareHistoryPlant(
+      serverSnapshot,
+      secondDevice,
+      "2026-08-17T12:00:01.000Z",
+    );
+    const reverseMerge = mergeCareHistoryPlant(
+      secondDevice,
+      serverSnapshot,
+      "2026-08-17T12:00:01.000Z",
+    );
+
+    assert.deepEqual(firstMerge.deletedPhotoIds, ["photo-a", "photo-b"]);
+    assert.deepEqual(reverseMerge.deletedPhotoIds, ["photo-b", "photo-a"]);
+    assert.deepEqual(firstMerge.photoIds, ["photo-c"]);
+    assert.deepEqual(reverseMerge.photoIds, ["photo-c"]);
+    assert.equal(firstMerge.photoId, "photo-c");
+    assert.equal(reverseMerge.photoId, "photo-c");
+
+    // A subsequent sync pass must keep both deletion tombstones and remain stable.
+    const converged = mergeCareHistoryPlant(
+      firstMerge,
+      reverseMerge,
+      "2026-08-17T12:00:02.000Z",
+    );
+    assert.deepEqual(new Set(converged.deletedPhotoIds), new Set(["photo-a", "photo-b"]));
+    assert.deepEqual(converged.photoIds, ["photo-c"]);
+  },
+);
