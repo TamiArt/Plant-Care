@@ -54,6 +54,6 @@ test("plant UPSERT cannot clear an existing deletion tombstone", () => {
   // Preserve row ownership and last-write-wins guards in the same UPSERT.
   assert.match(
     query,
-    /WHERE plants\\.user_id = excluded\\.user_id\\s+AND excluded\\.updated_at >= plants\\.updated_at/s,
+    /WHERE plants\.user_id = excluded\.user_id\s+AND excluded\.updated_at >= plants\.updated_at/s,
   );
 });
