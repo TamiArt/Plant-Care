@@ -114,12 +114,20 @@ export function mergeSyncedPlant(
 ): UserPlant {
   // A soft-delete tombstone is authoritative. A stale device may have
   // a skewed/future updatedAt; it must not resurrect a deleted plant.
+  const localIsDeleted = typeof local.deletedAt === "string";
+  const remoteIsDeleted = typeof remote.deletedAt === "string";
+  // If both snapshots are deleted, use the later tombstone's metadata.
+  // A single tombstone still wins over an active snapshot with a skewed clock.
   const deletionTombstone =
-    typeof local.deletedAt === "string"
-      ? local
-      : typeof remote.deletedAt === "string"
-        ? remote
-        : null;
+    localIsDeleted && remoteIsDeleted
+      ? Date.parse(local.deletedAt!) > Date.parse(remote.deletedAt!)
+        ? local
+        : remote
+      : localIsDeleted
+        ? local
+        : remoteIsDeleted
+          ? remote
+          : null;
   const base =
     deletionTombstone ??
     (local.updatedAt > remote.updatedAt
