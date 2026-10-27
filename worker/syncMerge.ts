@@ -122,8 +122,11 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
   incoming: T,
   _serverNow: string,
 ): T {
+  // On equal client timestamps, prefer the persisted server version. This
+  // avoids letting a concurrent request with the same millisecond timestamp
+  // win ordinary metadata solely because it arrived as the incoming payload.
   const base =
-    incoming.updatedAt >= remote.updatedAt
+    incoming.updatedAt > remote.updatedAt
       ? incoming
       : remote;
 
