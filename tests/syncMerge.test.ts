@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  hasAllCareHistory,
   mergeCareHistoryPlant,
 } from "../worker/syncMerge.ts";
 
@@ -415,5 +416,42 @@ test(
     assert.equal(result.nickname, "Имя с сервера");
     assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
     assert.equal(result.updatedAt, remote.updatedAt);
+  },
+);
+
+
+test(
+  "detects care history missing after a concurrent sync write",
+  () => {
+    const persisted = plant({
+      wateringHistory: ["2026-08-01"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: [],
+    });
+    const incoming = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+
+    assert.equal(hasAllCareHistory(persisted, incoming), false);
+  },
+);
+
+test(
+  "accepts persisted care history that contains every incoming event",
+  () => {
+    const persisted = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10", "2026-08-16"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+    const incoming = plant({
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+      mistingHistory: ["2026-08-10"],
+      fertilizingHistory: ["2026-08-15"],
+    });
+
+    assert.equal(hasAllCareHistory(persisted, incoming), true);
   },
 );
