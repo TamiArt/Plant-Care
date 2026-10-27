@@ -25,19 +25,6 @@ function mergeHistory(
   ].sort();
 }
 
-function sameHistory(
-  first: string[],
-  second: string[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (value, index) =>
-        value === second[index],
-    )
-  );
-}
-
 function normalizedPhotoIds(
   plant: CareHistoryPlant,
 ): string[] {
@@ -152,20 +139,6 @@ export function mergeCareHistoryPlant<T extends CareHistoryPlant>(
     remote.fertilizingHistory,
     incoming.fertilizingHistory,
   );
-
-  const historyChanged =
-    !sameHistory(
-      base.wateringHistory,
-      wateringHistory,
-    ) ||
-    !sameHistory(
-      base.mistingHistory,
-      mistingHistory,
-    ) ||
-    !sameHistory(
-      base.fertilizingHistory,
-      fertilizingHistory,
-    );
 
   return {
     ...base,
