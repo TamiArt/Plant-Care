@@ -390,3 +390,30 @@ test(
     assert.equal(result.photoId, "photo-4");
   },
 );
+
+
+test(
+  "merging care history does not promote stale metadata to server time",
+  () => {
+    const remote = plant({
+      nickname: "Имя с сервера",
+      updatedAt: "2026-08-17T12:00:00.000Z",
+      wateringHistory: ["2026-08-01"],
+    });
+    const incoming = plant({
+      nickname: "Устаревшее локальное имя",
+      updatedAt: "2026-08-17T11:00:00.000Z",
+      wateringHistory: ["2026-08-01", "2026-08-17"],
+    });
+
+    const result = mergeCareHistoryPlant(
+      remote,
+      incoming,
+      "2026-08-17T12:30:00.000Z",
+    );
+
+    assert.equal(result.nickname, "Имя с сервера");
+    assert.deepEqual(result.wateringHistory, ["2026-08-01", "2026-08-17"]);
+    assert.equal(result.updatedAt, remote.updatedAt);
+  },
+);
